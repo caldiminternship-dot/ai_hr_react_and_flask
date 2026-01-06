@@ -1,0 +1,27 @@
+======================================================================
+VIRTUAL HR INTERVIEWER - INTERVIEW REPORT
+======================================================================
+Start Time: 2026-01-06 15:04:08
+======================================================================
+
+[15:04:08] INTERVIEW STARTED
+Interviewer: Tell me about yourself, including your projects, technical skills, and work experience.
+========================================
+Candidate (Introduction): I am a front-end developer with a strong foundation in JavaScript and React, experienced in building responsive and user-friendly web applications using components, props, hooks like useState and useEffect, and efficient form handling. I have worked on practical projects such as a role-based login system, task management, and an expense tracker, which helped me understand real-world application flow, state management, and conditional rendering. My technical skills include HTML, CSS (including da...
+
+========================================
+AI ANALYSIS OF INTRODUCTION:
+Primary Skill: Frontend
+Experience Level: Junior
+Confidence: Medium
+Skills Identified: javascript, react, node.js, node, express, rest, html, css, frontend
+Projects Mentioned: 0
+Introduction Score: 8/10
+========================================
+
+
+========================================
+[15:04:10] Question 2:
+Type: TECHNICAL
+Content: What is the virtual DOM and why is it important in React?
+========================================

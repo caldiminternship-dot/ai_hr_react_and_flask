@@ -7,7 +7,7 @@ from config import MAX_QUESTIONS, MIN_QUESTIONS
 import openai
 from config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL
 
-class InterviewManager:
+class InterviewManager: 
     def __init__(self):
         self.question_generator = QuestionGenerator()
         self.response_analyzer = ResponseAnalyzer()
@@ -52,7 +52,7 @@ class InterviewManager:
     def _write_to_report(self, text: str, include_timestamp: bool = False):
         """Write text to the report file"""
         try:
-            with open(self.report_filename, 'a', encoding='utf-8') as f:
+            with open(self.report_filename, 'a', encoding='utf-8') as f: # type: ignore
                 if include_timestamp:
                     timestamp = time.strftime("%H:%M:%S")
                     f.write(f"[{timestamp}] {text}\n")
@@ -228,7 +228,7 @@ class InterviewManager:
         """Get the next AI-generated question based on interview progress"""
         
         if self.current_question_count == 0:
-            return None
+            return None # type: ignore
         
         # Check if it's time for a behavioral question
         total_questions = len(self.interview_data["questions_asked"])
@@ -269,7 +269,7 @@ class InterviewManager:
             # Return only the clean question (without AI tag)
             return question  # Return the clean question without tag
         
-        return None
+        return None # type: ignore
     
     def should_continue(self) -> bool:
         """Determine if interview should continue"""
@@ -430,7 +430,7 @@ class InterviewManager:
                 max_tokens=150
             )
             
-            return response.choices[0].message.content.strip()
+            return response.choices[0].message.content.strip() # type: ignore
             
         except Exception as e:
             return "AI analysis unavailable. See detailed scores below."
@@ -439,7 +439,7 @@ class InterviewManager:
         """Write comprehensive interview report to file"""
         try:
             # Write full report (overwriting the temporary log)
-            with open(self.report_filename, 'w', encoding='utf-8') as f:
+            with open(self.report_filename, 'w', encoding='utf-8') as f: # type: ignore
                 f.write("="*70 + "\n")
                 f.write("VIRTUAL HR INTERVIEWER - COMPREHENSIVE INTERVIEW REPORT\n")
                 f.write("="*70 + "\n\n")

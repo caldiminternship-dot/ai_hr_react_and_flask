@@ -32,7 +32,7 @@ class InterviewManager:
         
         # Create timestamp for filename
         timestamp = time.strftime("%Y%m%d_%H%M%S")
-        self.report_filename = f"interview_report_{timestamp}.txt"
+        self.report_filename = f"/reports/interview_report_{timestamp}.txt"
         
         print(format_response("\n" + "="*60, Fore.CYAN))
         print(format_response("VIRTUAL HR INTERVIEWER (AI-Powered)", Fore.CYAN + Style.BRIGHT))

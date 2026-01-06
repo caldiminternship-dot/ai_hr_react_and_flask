@@ -1,12 +1,9 @@
 import streamlit as st
 import time
-import json
 import os
 from datetime import datetime
 from interview_manager import InterviewManager
-from utils import format_response, Fore, Style
 import base64
-import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
@@ -18,31 +15,78 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS
-def load_css():
-    with open("assets/style.css") as f:
-        st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
-
-load_css()
+# Custom CSS - Simplified version
+css = """
+<style>
+.stApp {
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+}
+.header-container {
+    text-align: center;
+    padding: 2rem;
+    background: linear-gradient(90deg, #1a237e, #283593);
+    border-radius: 15px;
+    color: white;
+    margin-bottom: 2rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+.chat-message {
+    padding: 1rem;
+    border-radius: 10px;
+    margin: 0.5rem 0;
+    border-left: 4px solid;
+}
+.interviewer-message {
+    background: rgba(66, 133, 244, 0.1);
+    border-color: #4285F4;
+}
+.candidate-message {
+    background: rgba(52, 168, 83, 0.1);
+    border-color: #34A853;
+}
+.feedback-message {
+    background: rgba(251, 188, 5, 0.1);
+    border-color: #FBBC05;
+}
+.score-badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 15px;
+    font-size: 0.8em;
+    font-weight: bold;
+    margin-left: 10px;
+}
+.score-excellent { background: #4CAF50; color: white; }
+.score-good { background: #8BC34A; color: white; }
+.score-average { background: #FF9800; color: white; }
+.score-poor { background: #F44336; color: white; }
+.progress-container {
+    background: rgba(255, 255, 255, 0.9);
+    padding: 1rem;
+    border-radius: 10px;
+    margin: 1rem 0;
+}
+</style>
+"""
+st.markdown(css, unsafe_allow_html=True)
 
 # Initialize session state
 def init_session_state():
-    if 'interview_started' not in st.session_state:
-        st.session_state.interview_started = False
-    if 'interview_manager' not in st.session_state:
-        st.session_state.interview_manager = None
-    if 'current_question' not in st.session_state:
-        st.session_state.current_question = None
-    if 'interview_history' not in st.session_state:
-        st.session_state.interview_history = []
-    if 'user_response' not in st.session_state:
-        st.session_state.user_response = ""
-    if 'interview_completed' not in st.session_state:
-        st.session_state.interview_completed = False
-    if 'report_data' not in st.session_state:
-        st.session_state.report_data = None
-    if 'question_count' not in st.session_state:
-        st.session_state.question_count = 0
+    defaults = {
+        'interview_started': False,
+        'interview_manager': None,
+        'current_question': None,
+        'interview_history': [],
+        'user_response': "",
+        'interview_completed': False,
+        'question_count': 0,
+        'total_questions': 7,
+        'scores': []
+    }
+    
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
 
 init_session_state()
 
@@ -56,17 +100,33 @@ def add_to_history(role, content, score=None):
         'score': score
     })
 
-def get_download_link(filename):
-    """Create download link for report file"""
-    with open(filename, 'r', encoding='utf-8') as f:
-        content = f.read()
-    b64 = base64.b64encode(content.encode()).decode()
-    return f'<a href="data:file/txt;base64,{b64}" download="{os.path.basename(filename)}">Download Full Report</a>'
+def safe_file_read(filename):
+    """Safely read file with multiple encoding attempts"""
+    encodings = ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']
+    for encoding in encodings:
+        try:
+            with open(filename, 'r', encoding=encoding) as f:
+                return f.read()
+        except UnicodeDecodeError:
+            continue
+    # If all encodings fail, try binary read
+    with open(filename, 'rb') as f:
+        return f.read().decode('utf-8', errors='ignore')
 
 def visualize_scores(scores_data):
     """Create score visualization"""
-    if not scores_data:
-        return None
+    if not scores_data or not isinstance(scores_data, dict):
+        # Create a placeholder visualization for no data
+        fig = go.Figure()
+        fig.add_annotation(
+            text="No score data available",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5,
+            showarrow=False,
+            font=dict(size=20)
+        )
+        fig.update_layout(height=400)
+        return fig
     
     fig = make_subplots(
         rows=1, cols=2,
@@ -107,390 +167,521 @@ def visualize_scores(scores_data):
         go.Bar(x=categories, y=category_scores, marker_color='#636efa'),
         row=1, col=2
     )
-    
+
     fig.update_layout(height=400, showlegend=True)
     return fig
 
-# Main application
-def main():
-    # Header
-    col1, col2, col3 = st.columns([1, 2, 1])
+def get_score_badge(score):
+    """Get CSS class for score badge"""
+    if score >= 8:
+        return "score-excellent"
+    elif score >= 6:
+        return "score-good"
+    elif score >= 4:
+        return "score-average"
+    else:
+        return "score-poor"
+
+def show_welcome_screen():
+    """Display welcome screen"""
+    st.markdown("---")
+    
+    col1, col2 = st.columns([1, 3])
     with col2:
-        st.title("🎯 Virtual HR Interviewer")
-        st.markdown("### AI-Powered Technical & Behavioral Screening")
-    
-    # Sidebar
-    with st.sidebar:
-        st.header("📊 Interview Dashboard")
-        
-        if st.session_state.interview_started:
-            # Progress tracking
-            progress = st.session_state.question_count / 8
-            st.progress(progress)
-            st.caption(f"Question {st.session_state.question_count}/8")
-            
-            # Quick stats
-            if st.session_state.interview_manager and st.session_state.interview_manager.interview_data['responses']:
-                responses = st.session_state.interview_manager.interview_data['responses']
-                if len(responses) > 1:
-                    avg_score = sum(r.get('score', 0) for r in responses[1:]) / len(responses[1:])
-                    st.metric("Current Score", f"{avg_score:.1f}/10")
-            
-            # Control buttons
-            st.markdown("---")
-            if st.button("⏹️ End Interview", type="secondary"):
-                st.session_state.interview_started = False
-                st.session_state.interview_completed = True
-                if st.session_state.interview_manager:
-                    st.session_state.interview_manager.end_interview(early_termination=True, reason="candidate_request")
-                st.rerun()
-        
-        # About section
-        st.markdown("---")
-        st.markdown("### ℹ️ About")
         st.markdown("""
-        This AI-powered interviewer:
-        - 🧠 Analyzes your introduction
-        - 🔄 Generates adaptive questions
-        - 📊 Evaluates responses in real-time
-        - 📝 Creates detailed reports
+        <div style='text-align: center;'>
+            <h2>🚀 Welcome to Virtual HR Interviewer</h2>
+            <p style='font-size: 1.2em;'>AI-Powered Technical Screening Platform</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("""
+        ### How it works:
+        1. **Introduction**: Share your background, skills, and experience
+        2. **AI Analysis**: Our system identifies your primary skills
+        3. **Adaptive Questions**: Get 7-8 tailored technical and behavioral questions
+        4. **Real-time Feedback**: Receive scores and feedback after each answer
+        5. **Comprehensive Report**: Get detailed analysis and recommendations
+        
+        ### Tips for success:
+        - Be specific about your projects and skills
+        - Aim for 100-200 words per answer
+        - Include real-world examples
+        - Take your time to think before responding
         """)
-    
-    # Main content area
-    if not st.session_state.interview_started and not st.session_state.interview_completed:
-        # Welcome screen
-        st.markdown("---")
-        col1, col2, col3 = st.columns([1, 3, 1])
-        with col2:
-            st.markdown("### 🚀 Ready to Begin?")
-            st.markdown("""
-            **How it works:**
-            1. You'll introduce yourself with your technical background
-            2. AI will analyze your skills and generate relevant questions
-            3. Answer 7-8 adaptive questions (mix of technical & behavioral)
-            4. Receive immediate feedback and a comprehensive report
-            
-            **Tips for best results:**
-            - Be specific about your projects and skills
-            - Aim for 100-200 words per answer
-            - Include real-world examples
-            - Take your time to think before responding
-            """)
-            
-            if st.button("🎤 Start Interview", type="primary", use_container_width=True):
-                st.session_state.interview_manager = InterviewManager()
-                st.session_state.interview_started = True
-                st.session_state.current_question = st.session_state.interview_manager.ask_initial_question()
-                add_to_history('interviewer', st.session_state.current_question)
-                st.rerun()
-            
-            # Past reports section (if any)
-            if os.path.exists('reports'):
-                report_files = [f for f in os.listdir('reports') if f.endswith('.txt')]
-                if report_files:
-                    st.markdown("---")
-                    st.markdown("### 📁 Previous Reports")
-                    for report in report_files[-3:]:  # Show last 3
-                        with open(f"reports/{report}", 'r') as f:
-                            content = f.read(200) + "..."
-                        with st.expander(f"📄 {report}"):
-                            st.text(content[:500])
-                            st.download_button(
-                                label="Download",
-                                data=open(f"reports/{report}", 'r').read(),
-                                file_name=report,
-                                mime="text/plain"
-                            )
-    
-    elif st.session_state.interview_started and not st.session_state.interview_completed:
-        # Interview in progress
-        st.markdown("---")
         
-        # Interview chat display
-        chat_container = st.container()
-        with chat_container:
-            st.markdown("### 💬 Interview Dialogue")
-            
-            for i, message in enumerate(st.session_state.interview_history):
-                if message['role'] == 'interviewer':
-                    with st.chat_message("assistant", avatar="💼"):
-                        st.markdown(f"**Interviewer:** {message['content']}")
-                        if 'score' in message and message['score']:
-                            st.caption(f"Score: {message['score']}/10")
-                elif message['role'] == 'candidate':
-                    with st.chat_message("user", avatar="🧑‍💻"):
-                        st.markdown(f"**You:** {message['content']}")
-                elif message['role'] == 'feedback':
-                    with st.chat_message("assistant", avatar="📊"):
-                        st.markdown(f"📈 **Feedback:** {message['content']}")
-        
-        # Current question display
-        if st.session_state.current_question:
-            st.markdown("---")
-            st.markdown(f"### 📝 **Current Question**")
-            st.info(st.session_state.current_question)
-        
-        # Response input
-        st.markdown("---")
-        st.markdown("### 💭 Your Response")
-        
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            response = st.text_area(
-                "Type your answer here:",
-                value=st.session_state.user_response,
-                height=150,
-                key="response_input",
-                placeholder="Provide a detailed answer (100-200 words recommended)...",
-                label_visibility="collapsed"
-            )
-            st.session_state.user_response = response
-        
-        with col2:
-            st.markdown("###")
-            if st.button("📤 Submit Answer", type="primary", use_container_width=True):
-                if response.strip():
-                    # Process response
-                    add_to_history('candidate', response)
-                    
-                    # Process through interview manager
-                    manager = st.session_state.interview_manager
-                    result = manager.process_response(response)
-                    
-                    # Add feedback to history
-                    if 'score' in result:
-                        score = result.get('score', 0)
-                        feedback_msg = f"Response scored: {score}/10"
-                        if score >= 8:
-                            feedback_msg += " - Excellent!"
-                        elif score >= 6:
-                            feedback_msg += " - Good job!"
-                        else:
-                            feedback_msg += " - Needs improvement."
-                        add_to_history('feedback', feedback_msg, score)
-                    
-                    # Get next question or end interview
-                    if manager.should_continue():
-                        next_question = manager.get_next_question()
-                        if next_question:
-                            st.session_state.current_question = next_question
-                            st.session_state.question_count += 1
-                            add_to_history('interviewer', next_question)
-                        else:
-                            st.session_state.interview_completed = True
-                            manager.end_interview()
-                    else:
-                        st.session_state.interview_completed = True
-                        manager.end_interview()
-                    
-                    # Clear response
-                    st.session_state.user_response = ""
-                    st.rerun()
-                else:
-                    st.warning("Please enter a response before submitting.")
-            
-            if st.button("⏭️ Skip Question", type="secondary", use_container_width=True):
-                add_to_history('candidate', "[Skipped]")
-                manager = st.session_state.interview_manager
-                next_question = manager.get_next_question()
-                if next_question:
-                    st.session_state.current_question = next_question
-                    st.session_state.question_count += 1
-                    add_to_history('interviewer', next_question)
-                    st.rerun()
-    
-    elif st.session_state.interview_completed:
-        # Report display
-        st.markdown("---")
-        st.markdown("## 📊 Interview Analysis Complete")
-        
-        if st.session_state.interview_manager:
-            manager = st.session_state.interview_manager
-            interview_data = manager.interview_data
-            
-            # Create tabs for different report sections
-            tab1, tab2, tab3, tab4 = st.tabs(["📈 Summary", "📝 Detailed Analysis", "📋 Transcript", "💡 Recommendations"])
-            
-            with tab1:
-                # Overall summary
-                col1, col2, col3 = st.columns(3)
-                
-                with col1:
-                    total_q = len(interview_data['questions_asked']) - 1
-                    st.metric("Questions Answered", total_q)
-                
-                with col2:
-                    if interview_data['responses']:
-                        avg_score = sum(r.get('score', 0) for r in interview_data['responses'][1:]) / len(interview_data['responses'][1:])
-                        st.metric("Average Score", f"{avg_score:.1f}/10")
-                
-                with col3:
-                    primary_skill = interview_data['candidate_info'].get('primary_skill', 'N/A').title()
-                    st.metric("Primary Skill", primary_skill)
-                
-                # Score visualization
-                if interview_data['responses']:
-                    scores = []
-                    for response in interview_data['responses'][1:]:
-                        if 'evaluation' in response:
-                            scores.append(response['evaluation'])
-                    
-                    if scores:
-                        avg_scores = {
-                            'overall': avg_score,
-                            'technical_accuracy': sum(s.get('technical_accuracy', 0) for s in scores) / len(scores),
-                            'completeness': sum(s.get('completeness', 0) for s in scores) / len(scores),
-                            'clarity': sum(s.get('clarity', 0) for s in scores) / len(scores),
-                            'depth': sum(s.get('depth', 0) for s in scores) / len(scores),
-                            'practicality': sum(s.get('practicality', 0) for s in scores) / len(scores),
-                        }
-                        
-                        fig = visualize_scores(avg_scores)
-                        if fig:
-                            st.plotly_chart(fig, use_container_width=True)
-            
-            with tab2:
-                # Question-by-question analysis
-                st.markdown("### 📋 Question Analysis")
-                
-                for i, response in enumerate(interview_data['responses']):
-                    if i == 0:
-                        # Introduction
-                        with st.expander(f"📄 Introduction", expanded=False):
-                            st.markdown(f"**Question:** {response['question']}")
-                            st.markdown(f"**Your Answer:** {response['answer'][:500]}...")
-                            st.markdown(f"**Score:** {response.get('score', 'N/A')}/10")
-                    else:
-                        # Regular questions
-                        with st.expander(f"Q{i}: {response['question'][:50]}...", expanded=False):
-                            col1, col2 = st.columns([3, 1])
-                            with col1:
-                                st.markdown(f"**Question:** {response['question']}")
-                                st.markdown(f"**Your Answer:** {response['answer']}")
-                            with col2:
-                                score = response.get('score', 0)
-                                score_color = "🟢" if score >= 8 else "🟡" if score >= 5 else "🔴"
-                                st.metric("Score", f"{score}/10", delta=score_color)
+        # Past reports section
+        if os.path.exists('reports'):
+            report_files = [f for f in os.listdir('reports') if f.endswith('.txt')]
+            if report_files:
+                st.markdown("---")
+                st.markdown("### 📁 Previous Interview Reports")
+                for report in sorted(report_files[-3:], reverse=True):
+                    try:
+                        content = safe_file_read(f"reports/{report}")[:300] + "..."
+                        with st.expander(f"📄 {report}", expanded=False):
+                            st.text(content)
                             
-                            if 'evaluation' in response:
-                                eval_data = response['evaluation']
-                                st.markdown("**Detailed Evaluation:**")
-                                
-                                eval_cols = st.columns(5)
-                                metrics = [
-                                    ("Technical", eval_data.get('technical_accuracy', 0)),
-                                    ("Complete", eval_data.get('completeness', 0)),
-                                    ("Clear", eval_data.get('clarity', 0)),
-                                    ("Deep", eval_data.get('depth', 0)),
-                                    ("Practical", eval_data.get('practicality', 0))
-                                ]
-                                
-                                for idx, (label, value) in enumerate(metrics):
-                                    with eval_cols[idx]:
-                                        st.progress(value/10)
-                                        st.caption(f"{label}: {value}/10")
+                            # Safe download
+                            try:
+                                file_content = safe_file_read(f"reports/{report}")
+                                st.download_button(
+                                    label="📥 Download Report",
+                                    data=file_content,
+                                    file_name=report,
+                                    mime="text/plain",
+                                    key=f"dl_{report}"
+                                )
+                            except:
+                                st.warning("Could not load file for download")
+                    except Exception as e:
+                        st.error(f"Error reading report: {str(e)}")
+        
+        # Start button
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            if st.button("🎤 Start New Interview", type="primary", use_container_width=True, key="start_btn"):
+                try:
+                    manager = InterviewManager()
+                    st.session_state.interview_manager = manager
+                    st.session_state.interview_started = True
+                    
+                    # Get initial question
+                    initial_question = "Tell me about yourself, including your projects, technical skills, and work experience."
+                    st.session_state.current_question = initial_question
+                    
+                    # Ensure questions_asked list exists
+                    if not hasattr(manager.interview_data, 'questions_asked') or manager.interview_data.get('questions_asked') is None:
+                        manager.interview_data['questions_asked'] = []
+                    
+                    manager.interview_data['questions_asked'].append(initial_question)
+                    
+                    # Add to history
+                    add_to_history('interviewer', initial_question)
+                    
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error starting interview: {str(e)}")
+                    st.exception(e)
+
+def show_interview_in_progress():
+    """Display interview in progress"""
+    st.markdown("---")
+    
+    # Progress bar
+    progress = min(st.session_state.question_count / st.session_state.total_questions, 1.0)
+    st.markdown(f"""
+    <div class='progress-container'>
+        <div style='display: flex; justify-content: space-between; margin-bottom: 10px;'>
+            <span><strong>Progress:</strong> Question {st.session_state.question_count}/{st.session_state.total_questions}</span>
+            <span><strong>{(progress*100):.0f}% Complete</strong></span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Chat display
+    st.markdown("### 💬 Interview Dialogue")
+    
+    for message in st.session_state.interview_history:
+        if message['role'] == 'interviewer':
+            st.markdown(f"""
+            <div class='chat-message interviewer-message'>
+                <strong>💼 Interviewer:</strong> {message['content']}
+            </div>
+            """, unsafe_allow_html=True)
+        elif message['role'] == 'candidate':
+            st.markdown(f"""
+            <div class='chat-message candidate-message'>
+                <strong>🧑‍💻 You:</strong> {message['content']}
+            </div>
+            """, unsafe_allow_html=True)
+        elif message['role'] == 'feedback':
+            score_badge = ""
+            if message.get('score') is not None:
+                score = message['score']
+                badge_class = get_score_badge(score)
+                score_badge = f"<span class='score-badge {badge_class}'>{score}/10</span>"
             
-            with tab3:
-                # Full transcript
-                st.markdown("### 📜 Complete Interview Transcript")
+            st.markdown(f"""
+            <div class='chat-message feedback-message'>
+                <strong>📊 Feedback:</strong> {message['content']} {score_badge}
+            </div>
+            """, unsafe_allow_html=True)
+    
+    # Current question
+    if st.session_state.current_question:
+        st.markdown("---")
+        st.markdown("### 📝 **Current Question**")
+        st.info(st.session_state.current_question)
+    
+    # Response input
+    st.markdown("---")
+    st.markdown("### 💭 Your Response")
+    
+    response = st.text_area(
+        "Type your answer here:",
+        value=st.session_state.user_response,
+        height=150,
+        key="response_input",
+        placeholder="Provide your detailed answer here...",
+        label_visibility="collapsed"
+    )
+    
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        if st.button("📤 Submit Answer", type="primary", use_container_width=True, disabled=not response.strip()): # type: ignore
+            process_response(response)
+    
+    with col2:
+        if st.button("⏭️ Skip Question", type="secondary", use_container_width=True):
+            skip_question()
+
+
+
+def skip_question():
+    """Skip current question"""
+    add_to_history('candidate', "[Question skipped]")
+    
+    manager = st.session_state.interview_manager
+    next_q = manager.get_next_question()
+    
+    if next_q:
+        st.session_state.current_question = next_q
+        st.session_state.question_count += 1
+        add_to_history('interviewer', next_q)
+        st.rerun()
+    else:
+        end_interview()
+
+def end_interview():
+    """End the interview"""
+    st.session_state.interview_completed = True
+    if st.session_state.interview_manager:
+        try:
+            st.session_state.interview_manager.end_interview()
+        except Exception as e:
+            st.warning(f"Note: Could not generate final report: {str(e)}")
+    st.rerun()
+
+def get_download_link(filename):
+    """Create download link for report file"""
+    if filename and os.path.exists(filename):
+        try:
+            with open(filename, 'r', encoding='utf-8') as f:
+                content = f.read()
+            b64 = base64.b64encode(content.encode()).decode()
+            return f'<a href="data:file/txt;base64,{b64}" download="{os.path.basename(filename)}">Download Full Report</a>'
+        except Exception as e:
+            return f"Error generating download link: {str(e)}"
+    return "Report not available"
+
+def show_report():
+    """Display interview report"""
+    st.markdown("---")
+    
+    if not st.session_state.interview_manager:
+        st.error("No interview data available.")
+        return
+    
+    manager = st.session_state.interview_manager
+    interview_data = manager.interview_data
+    
+    # Calculate summary statistics
+    total_questions = len(interview_data.get('questions_asked', [])) - 1
+    total_questions = max(0, total_questions)
+    
+    avg_score = 0
+    if interview_data.get('responses') and len(interview_data['responses']) > 1:
+        scores = [r.get('score', 0) for r in interview_data['responses'][1:]]
+        avg_score = sum(scores) / len(scores) if scores else 0
+    
+    primary_skill = interview_data.get('candidate_info', {}).get('primary_skill', 'Not identified')
+    
+    # Header
+    st.markdown("""
+    <div class='header-container'>
+        <h2>📊 Interview Analysis Complete</h2>
+        <p>Your detailed performance report is ready</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Summary metrics
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Questions Answered", total_questions)
+    with col2:
+        st.metric("Average Score", f"{avg_score:.1f}/10")
+    with col3:
+        st.metric("Primary Skill", primary_skill.title())
+    
+    # interview_data = manager.interview_data
+
+    # Create tabs
+    tab1, tab2, tab3, tab4 = st.tabs(["📈 Visualization", "📋 Detailed Analysis", "📜 Transcript", "🎯 Recommendation"])
+    
+    with tab1:
+        # Score visualization
+        if st.session_state.scores:
+            fig = visualize_scores(st.session_state.scores)
+            if fig:
+                st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No score data available for visualization.")
+    
+    with tab2:
+        # Question-by-question analysis
+        if interview_data.get('responses'):
+            st.markdown("### Question Analysis")
+            
+            for i, response in enumerate(interview_data['responses']):
+                if i == 0:
+                    continue  # Skip introduction
                 
-                transcript = ""
-                for i, response in enumerate(interview_data['responses']):
-                    if i == 0:
-                        transcript += f"### Introduction\n\n"
-                        transcript += f"**Interviewer:** {response['question']}\n\n"
-                        transcript += f"**Candidate:** {response['answer']}\n\n"
-                    else:
-                        transcript += f"### Question {i}\n\n"
-                        transcript += f"**Interviewer:** {response['question']}\n\n"
-                        transcript += f"**Candidate:** {response['answer']}\n\n"
-                        transcript += f"**Score:** {response.get('score', 'N/A')}/10\n\n"
-                        transcript += "---\n\n"
-                
-                st.text_area("Transcript", transcript, height=600)
-                
-                # Download button for transcript
-                if st.button("📥 Download Transcript", type="secondary"):
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    filename = f"reports/interview_transcript_{timestamp}.txt"
-                    os.makedirs("reports", exist_ok=True)
+                with st.expander(f"Q{i}: {response.get('question', 'Question')[0:50]}...", expanded=False):
+                    col1, col2 = st.columns([3, 1])
+                    with col1:
+                        st.markdown(f"**Question:** {response.get('question', 'N/A')}")
+                        st.markdown(f"**Your Answer:** {response.get('answer', 'N/A')}")
+                    with col2:
+                        score = response.get('score', 0)
+                        badge_class = get_score_badge(score)
+                        st.markdown(f"<div style='text-align: center;'><span class='score-badge {badge_class}'>{score}/10</span></div>", unsafe_allow_html=True)
+        else:
+            st.info("No detailed analysis available.")
+    
+    with tab3:
+        # Transcript
+        transcript = ""
+        if interview_data.get('responses'):
+            for i, response in enumerate(interview_data['responses']):
+                if i == 0:
+                    transcript += f"### Introduction\n\n"
+                    transcript += f"**Interviewer:** {response.get('question', 'Tell me about yourself...')}\n\n"
+                    transcript += f"**You:** {response.get('answer', '')}\n\n"
+                else:
+                    transcript += f"### Question {i}\n\n"
+                    transcript += f"**Interviewer:** {response.get('question', 'Question')}\n\n"
+                    transcript += f"**You:** {response.get('answer', 'Answer')}\n\n"
+                    transcript += f"**Score:** {response.get('score', 'N/A')}/10\n\n"
+                    transcript += "---\n\n"
+        
+        st.text_area("Interview Transcript", transcript or "No transcript available", height=400)
+        
+        # Download transcript
+        if transcript:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"reports/interview_transcript_{timestamp}.txt"
+            os.makedirs("reports", exist_ok=True)
+            
+            if st.button("📥 Download Transcript", key="download_transcript"):
+                try:
                     with open(filename, 'w', encoding='utf-8') as f:
                         f.write(transcript)
                     st.success(f"Transcript saved to {filename}")
-            
-            with tab4:
-                # Recommendations
-                st.markdown("### 🎯 Final Recommendation")
-                
-                if interview_data['responses']:
-                    avg_score = sum(r.get('score', 0) for r in interview_data['responses'][1:]) / len(interview_data['responses'][1:])
                     
-                    if avg_score >= 7:
-                        st.success("**✅ STRONGLY RECOMMEND - Proceed to Next Round**")
-                        st.markdown("""
-                        **Strengths identified:**
-                        - Demonstrates solid technical understanding
-                        - Provides clear, structured responses
-                        - Shows practical application knowledge
-                        
-                        **Next steps:**
-                        - Schedule technical coding interview
-                        - Prepare system design questions
-                        - Review company-specific tech stack
-                        """)
-                    elif avg_score >= 5:
-                        st.warning("**⚠️ CONDITIONAL RECOMMEND - Consider with Feedback**")
-                        st.markdown("""
-                        **Areas for improvement:**
-                        - Technical depth could be enhanced
-                        - Some gaps in advanced concepts
-                        - Could benefit from more examples
-                        
-                        **Development suggestions:**
-                        - Practice explaining complex concepts
-                        - Work on project portfolio
-                        - Consider mentorship program
-                        """)
-                    else:
-                        st.error("**❌ NOT RECOMMENDED - Requires Improvement**")
-                        st.markdown("""
-                        **Key concerns:**
-                        - Significant technical knowledge gaps
-                        - Responses lack depth and clarity
-                        - Limited practical application
-                        
-                        **Improvement roadmap:**
-                        - Focus on foundational concepts
-                        - Complete relevant coursework
-                        - Gain hands-on project experience
-                        - Re-apply in 3-6 months
-                        """)
+                    # Provide download link
+                    with open(filename, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                    b64 = base64.b64encode(content.encode()).decode()
+                    href = f'<a href="data:file/txt;base64,{b64}" download="{os.path.basename(filename)}">Click here to download</a>'
+                    st.markdown(href, unsafe_allow_html=True)
+                except Exception as e:
+                    st.error(f"Error saving transcript: {str(e)}")
+    
+    with tab4:
+        # Recommendation
+        st.markdown("### Final Recommendation")
+        
+        if avg_score >= 7:
+            st.success("""
+            **✅ STRONGLY RECOMMEND - Proceed to Next Round**
             
-            # Report download section
-            st.markdown("---")
-            st.markdown("### 📄 Full Report Download")
+            **Strengths identified:**
+            - Strong technical understanding
+            - Clear and structured communication
+            - Good practical knowledge
             
-            col1, col2 = st.columns(2)
-            with col1:
-                if hasattr(manager, 'report_filename') and os.path.exists(manager.report_filename):
-                    with open(manager.report_filename, 'r') as f:
-                        report_content = f.read()
-                    st.download_button(
-                        label="📥 Download Comprehensive Report",
-                        data=report_content,
-                        file_name=os.path.basename(manager.report_filename),
-                        mime="text/plain",
-                        type="primary",
-                        use_container_width=True
-                    )
+            **Next steps:**
+            - Schedule technical coding interview
+            - Prepare system design questions
+            - Review advanced concepts in primary skill area
+            """)
+        elif avg_score >= 5:
+            st.warning("""
+            **⚠️ CONDITIONAL RECOMMEND - Consider with Feedback**
             
-            with col2:
-                if st.button("🔄 Start New Interview", type="secondary", use_container_width=True):
-                    # Reset session state
-                    for key in list(st.session_state.keys()):
-                        del st.session_state[key]
-                    init_session_state()
-                    st.rerun()
+            **Areas for improvement:**
+            - Technical depth needs enhancement
+            - Some gaps in advanced concepts
+            - Could use more practical examples
+            
+            **Development suggestions:**
+            - Practice explaining complex concepts
+            - Work on hands-on projects
+            - Consider targeted learning resources
+            """)
+        else:
+            st.error("""
+            **❌ NOT RECOMMENDED - Requires Improvement**
+            
+            **Key concerns:**
+            - Significant knowledge gaps
+            - Responses lack depth
+            - Limited practical application
+            
+            **Improvement roadmap:**
+            - Focus on foundational concepts
+            - Complete relevant courses
+            - Gain project experience
+            - Re-apply in 3-6 months
+            """)
+    
+    # Report download and restart
+    # Report download section
+    st.markdown("---")
+    st.markdown("### 📄 Full Report Download")
+    
+    # Check if report was generated and has a valid filename
+    report_generated = False
+    report_content = ""
+    report_filename = ""
+    
+    if hasattr(manager, 'report_filename') and manager.report_filename:
+        try:
+            if os.path.exists(manager.report_filename):
+                with open(manager.report_filename, 'r') as f:
+                    report_content = f.read()
+                report_generated = True
+                report_filename = manager.report_filename
+        except (TypeError, FileNotFoundError):
+            # If file doesn't exist or path is invalid, generate a new one
+            pass
+    
+    # If report wasn't properly generated, create it now
+    if not report_generated:
+        # Generate a timestamp for the report
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        report_filename = f"reports/interview_report_{timestamp}.txt"
+        os.makedirs("reports", exist_ok=True)
+        
+        # Create report content
+        report_content = f"Interview Report - {timestamp}\n"
+        report_content += "="*50 + "\n\n"
+        report_content += f"Candidate: {interview_data['candidate_info'].get('name', 'N/A')}\n"
+        report_content += f"Primary Skill: {interview_data['candidate_info'].get('primary_skill', 'N/A')}\n"
+        report_content += f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+        
+        # Add summary
+        if interview_data['responses']:
+            avg_score = sum(r.get('score', 0) for r in interview_data['responses'][1:]) / len(interview_data['responses'][1:])
+            report_content += f"Overall Score: {avg_score:.1f}/10\n"
+            report_content += f"Questions Answered: {len(interview_data['questions_asked']) - 1}\n\n"
+        
+        # Save the report
+        with open(report_filename, 'w', encoding='utf-8') as f:
+            f.write(report_content)
+        
+        # Update the manager with the new filename
+        manager.report_filename = report_filename
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        # Now we know the report exists
+        st.download_button(
+            label="📥 Download Comprehensive Report",
+            data=report_content,
+            file_name=os.path.basename(report_filename),
+            mime="text/plain",
+            type="primary",
+            use_container_width=True
+        )
+    
+    with col2:
+        if st.button("🔄 Start New Interview", type="secondary", use_container_width=True):
+            # Reset session state
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
+            init_session_state()
+            st.rerun()
 
+def main():
+    """Main application function"""
+    # Header
+    st.markdown("""
+    <div class='header-container'>
+        <h1>🎯 Virtual HR Interviewer</h1>
+        <p style='font-size: 1.2em;'>AI-Powered Technical & Behavioral Screening</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Sidebar
+    with st.sidebar:
+        st.markdown("### 📊 Interview Dashboard")
+        
+        if st.session_state.interview_started:
+            # Progress
+            progress = min(st.session_state.question_count / st.session_state.total_questions, 1.0)
+            st.progress(progress)
+            st.caption(f"Question {st.session_state.question_count}/{st.session_state.total_questions}")
+            
+            # Score display if available
+            if st.session_state.scores:
+                avg_score = sum(st.session_state.scores) / len(st.session_state.scores) if st.session_state.scores else 0
+                st.metric("Current Average", f"{avg_score:.1f}/10")
+            
+            # Controls
+            st.markdown("---")
+            if st.button("⏹️ End Interview", type="secondary", use_container_width=True):
+                st.session_state.interview_started = False
+                st.session_state.interview_completed = True
+                st.rerun()
+        
+        # About
+        st.markdown("---")
+        st.markdown("### ℹ️ About This Tool")
+        st.markdown("""
+        This AI-powered interviewer:
+        - 🧠 Analyzes your technical background
+        - 🔄 Generates adaptive questions
+        - 📊 Provides real-time feedback
+        - 📝 Creates detailed reports
+        """)
+    
+    # Main content routing
+    if not st.session_state.interview_started and not st.session_state.interview_completed:
+        show_welcome_screen()
+    elif st.session_state.interview_started and not st.session_state.interview_completed:
+        show_interview_in_progress()
+
+    elif st.session_state.interview_completed:
+        st.markdown("---")
+        st.markdown("## 📊 Interview Analysis Complete")
+        
+        if not st.session_state.interview_manager:
+            st.error("Interview data not found. Please start a new interview.")
+            if st.button("🔄 Start New Interview", type="primary"):
+                # Reset session state
+                for key in list(st.session_state.keys()):
+                    del st.session_state[key]
+                init_session_state()
+                st.rerun()
+            return
+        
+        manager = st.session_state.interview_manager
+        
+        # Ensure interview_data exists
+        if not hasattr(manager, 'interview_data'):
+            st.error("No interview data available. Please start a new interview.")
+            if st.button("🔄 Start New Interview", type="primary"):
+                # Reset session state
+                for key in list(st.session_state.keys()):
+                    del st.session_state[key]
+                init_session_state()
+                st.rerun()
+            return
+
+        show_report()
+        
 if __name__ == "__main__":
     main()

@@ -7,11 +7,17 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from response_analyzer import ResponseAnalyzer
 from report_manager import ReportManager
+from question_generator import QuestionGenerator  # ADDED: Import QuestionGenerator
 import json
+
 # Initialize report manager
 report_manager = ReportManager()
+
 # Initialize the analyzer
 analyzer = ResponseAnalyzer()
+
+# ADDED: Initialize QuestionGenerator
+question_generator = QuestionGenerator()
 
 # Page configuration
 st.set_page_config(
@@ -297,15 +303,7 @@ def init_session_state():
         'interview_completed': False,
         'interview_terminated': False,
         'current_question_index': 0,
-        'questions': [
-            "Describe a challenging technical problem you solved recently and how you approached it.",
-            "Explain the difference between REST and GraphQL APIs and when you would use each.",
-            "How do you handle debugging a complex issue in a production system?",
-            "Describe your experience with version control systems and your typical workflow.",
-            "What's your approach to learning new technologies or frameworks?",
-            "Tell me about a time you had to work with a difficult team member and how you handled it.",
-            "Where do you see yourself in your career in 3-5 years?"
-        ],
+        'questions': [],  # CHANGED: Start with empty list, will be generated dynamically
         'messages': [],
         'candidate_profile': {},
         'question_evaluations': [],
@@ -315,7 +313,9 @@ def init_session_state():
         'intro_analysis': None,
         'termination_reason': '',
         'termination_log': [],
-        'current_response': ''
+        'current_response': '',
+        'total_questions_to_ask': 3,  # ADDED: Configurable number of questions
+        'questions_generated': False,  # ADDED: Track if questions have been generated
     }
     
     for key, value in defaults.items():
@@ -324,11 +324,76 @@ def init_session_state():
 
 init_session_state()
 
+def generate_adaptive_questions():
+    """Generate adaptive questions based on candidate profile"""
+    try:
+        if not st.session_state.candidate_profile:
+            return None
+        
+        skill_category = st.session_state.candidate_profile.get("primary_skill", "backend")
+        experience_level = st.session_state.candidate_profile.get("experience_level", "mid")
+        
+        # Generate initial skill-based questions
+        initial_questions = question_generator.generate_initial_skill_questions(
+            skill_category=skill_category,
+            candidate_level=experience_level
+        )
+        
+        if not initial_questions:
+            # Fallback to default questions if AI generation fails
+            initial_questions = [
+                "Describe a challenging technical problem you solved recently and how you approached it.",
+                "Explain the difference between REST and GraphQL APIs and when you would use each.",
+                "How do you handle debugging a complex issue in a production system?"
+            ]
+        
+        # Always include at least one behavioral question
+        behavioral_question = question_generator.generate_behavioral_question_ai(
+            candidate_background=st.session_state.candidate_profile,
+            context=st.session_state.question_evaluations
+        )
+        
+        if behavioral_question:
+            initial_questions.append(behavioral_question)
+        
+        return initial_questions[:st.session_state.total_questions_to_ask]
+    
+    except Exception as e:
+        st.error(f"Error generating adaptive questions: {e}")
+        # Fallback to static questions
+        return [
+            "Describe a challenging technical problem you solved recently and how you approached it.",
+            "Explain the difference between REST and GraphQL APIs and when you would use each.",
+            "How do you handle debugging a complex issue in a production system?",
+            "Describe your experience with version control systems and your typical workflow.",
+            "What's your approach to learning new technologies or frameworks?",
+            "Tell me about a time you had to work with a difficult team member and how you handled it.",
+            "Where do you see yourself in your career in 3-5 years?"
+        ]
+
+def get_next_question():
+    """Get the next question, generating adaptively if needed"""
+    # If we need to generate questions for the first time
+    if not st.session_state.questions_generated and st.session_state.introduction_analyzed:
+        questions = generate_adaptive_questions()
+        if questions:
+            st.session_state.questions = questions
+            st.session_state.questions_generated = True
+            return questions[0] if questions else None
+    
+    # If we have questions in the list
+    if st.session_state.questions:
+        current_idx = st.session_state.current_question_index
+        if current_idx < len(st.session_state.questions):
+            return st.session_state.questions[current_idx]
+    
+    return None
+
 def process_response(response_text):
     """Process the candidate's response and update interview state"""
     
-    # Clear the input after processing
-    st.session_state.current_response = ""
+    # Clear the input after processing - FIXED: This is already done at the beginning
+    # st.session_state.current_response = ""  # Removed duplicate clearing
     
     if not response_text or response_text.strip() == "":
         st.warning("Please enter a response before submitting.")
@@ -382,7 +447,7 @@ def process_response(response_text):
                 st.session_state.candidate_profile.update({
                     "skills": analysis.get("skills", []),
                     "experience_level": analysis.get("experience", "mid"),
-                    "primary_skill": analysis.get("primary_skill", "unknown"),
+                    "primary_skill": analysis.get("primary_skill", "backend"),
                     "confidence": analysis.get("confidence", "medium"),
                     "communication": analysis.get("communication", "adequate"),
                     "intro_score": analysis.get("intro_score", 5)
@@ -398,20 +463,26 @@ def process_response(response_text):
                 # Add system message
                 st.session_state.messages.append({
                     "role": "system",
-                    "content": f"✅ Introduction analyzed.",
+                    "content": f"✅ Introduction analyzed. Generating adaptive questions...",
                     "timestamp": datetime.now().strftime("%H:%M:%S")
                 })
             
             # For regular questions
             else:
-                question_idx = st.session_state.current_question_index - 1
-                if question_idx < len(st.session_state.questions):
-                    question = st.session_state.questions[question_idx]
-                    evaluation = analyzer.evaluate_answer(question, response_text)
+                # Get the current question
+                current_question = get_next_question()
+                if not current_question and st.session_state.questions:
+                    # Fallback to stored questions
+                    question_idx = st.session_state.current_question_index - 1
+                    if question_idx < len(st.session_state.questions):
+                        current_question = st.session_state.questions[question_idx]
+                
+                if current_question:
+                    evaluation = analyzer.evaluate_answer(current_question, response_text)
                     
                     # Store evaluation
                     st.session_state.question_evaluations.append({
-                        "question": question,
+                        "question": current_question,
                         "answer": response_text,
                         "evaluation": evaluation,
                         "timestamp": datetime.now().strftime("%H:%M:%S")
@@ -424,8 +495,28 @@ def process_response(response_text):
                     st.session_state.overall_score = new_overall
                     
                     # Move to next question or end interview
-                    if st.session_state.current_question_index < len(st.session_state.questions):
+                    if st.session_state.current_question_index < st.session_state.total_questions_to_ask:
                         st.session_state.current_question_index += 1
+                        
+                        # Generate adaptive follow-up question if we're running out
+                        if len(st.session_state.questions) <= st.session_state.current_question_index:
+                            try:
+                                skill_category = st.session_state.candidate_profile.get("primary_skill", "backend")
+                                experience_level = st.session_state.candidate_profile.get("experience_level", "mid")
+                                
+                                # Generate adaptive follow-up
+                                last_response = st.session_state.question_evaluations[-1]
+                                followup_question = question_generator.generate_adaptive_followup(
+                                    previous_question=last_response["question"],
+                                    candidate_answer=last_response["answer"],
+                                    skill_category=skill_category,
+                                    difficulty_level=min(5, st.session_state.current_question_index + 1)
+                                )
+                                
+                                if followup_question and followup_question not in st.session_state.questions:
+                                    st.session_state.questions.append(followup_question)
+                            except Exception as e:
+                                st.warning(f"Could not generate adaptive follow-up: {e}")
                     else:
                         st.session_state.interview_completed = True
                         st.session_state.interview_active = False
@@ -434,7 +525,7 @@ def process_response(response_text):
                         if st.session_state.question_evaluations:
                             scores = [e["evaluation"]["overall"] for e in st.session_state.question_evaluations]
                             st.session_state.final_score = sum(scores) / len(scores)
-                    
+                        
                         try:
                             report_path = save_interview_report()
                             if report_path:
@@ -443,8 +534,7 @@ def process_response(response_text):
                                 st.warning("⚠️ Interview completed but report not saved.")
                         except Exception as e:
                             st.error(f"❌ Error saving report: {e}")
-                        st.session_state.current_response = ""
-                        
+                    
                     # MODIFIED: Remove score from feedback
                     score = evaluation.get("overall", 5)
                     feedback_icon = "✅" if score >= 7 else "⚠️" if score >= 5 else "❌"
@@ -453,6 +543,12 @@ def process_response(response_text):
                         "content": f"{feedback_icon} Answer received and analyzed.",
                         "timestamp": datetime.now().strftime("%H:%M:%S")
                     })
+                
+                else:
+                    # No question available
+                    st.error("No question available. Ending interview.")
+                    st.session_state.interview_completed = True
+                    st.session_state.interview_active = False
     
     except Exception as e:
         st.error(f"Error analyzing response: {e}")
@@ -461,6 +557,9 @@ def process_response(response_text):
             "content": f"❌ Error analyzing response. Please continue.",
             "timestamp": datetime.now().strftime("%H:%M:%S")
         })
+    
+    # Clear the current response for next question - ADDED: This clears the input field
+    st.session_state.current_response = ""
     
     # Force rerun to update UI
     st.rerun()
@@ -479,28 +578,31 @@ def show_interview_in_progress():
     if not st.session_state.get("introduction_analyzed", False):
         current_prompt = "Please introduce yourself, including your experience, skills, and relevant projects."
     else:
-        current_question_index = st.session_state.current_question_index
-        if current_question_index < len(st.session_state.questions):
-            current_prompt = st.session_state.questions[current_question_index - 1]
+        current_question = get_next_question()
+        if current_question:
+            current_prompt = current_question
         else:
             current_prompt = "All questions completed. Thank you!"
     
     st.info(f"**Current Question:** {current_prompt}")
     
-    # Response input
+    # Response input - FIXED: Use a unique key and bind to session state
     response = st.text_area(
         "Your Response:",
         value=st.session_state.get("current_response", ""),
-        key="response_input",
+        key=f"response_input_{st.session_state.current_question_index}",  # Unique key for each question
         height=180,
         placeholder="Type your detailed response here...",
         help="Provide a comprehensive answer with examples where possible"
     )
     
+    # Update session state with current response
+    st.session_state.current_response = response
+    
     # Submit button
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        if st.button("📤 Submit Response", type="primary", use_container_width=True, key="submit_response_btn"):
+        if st.button("📤 Submit Response", type="primary", use_container_width=True, key=f"submit_response_{st.session_state.current_question_index}"):
             if response and response.strip():
                 # Process the response
                 process_response(response.strip())
@@ -509,9 +611,16 @@ def show_interview_in_progress():
     
     # Display progress
     st.markdown("---")
-    total_questions = len(st.session_state.questions)
+    total_questions = st.session_state.total_questions_to_ask
     progress = min(st.session_state.current_question_index / total_questions, 1.0)
     st.progress(progress, text=f"Progress: Question {st.session_state.current_question_index} of {total_questions}")
+    
+    # Display adaptive questions info if available
+    if st.session_state.introduction_analyzed and st.session_state.questions:
+        with st.expander("📋 Interview Questions", expanded=False):
+            for i, question in enumerate(st.session_state.questions):
+                status = "✅" if i < st.session_state.current_question_index - 1 else "⏳" if i == st.session_state.current_question_index - 1 else "🔲"
+                st.markdown(f"{status} **Q{i+1}:** {question}")
     
     # Display chat history
     st.markdown("### 💬 Conversation History")
@@ -545,7 +654,7 @@ def show_welcome_screen():
         <div style='text-align: center; margin-bottom: 2rem;'>
             <h2 style='color: #64B5F6;'>Welcome to Your Technical Interview</h2>
             <p style='color: #B0BEC5; font-size: 1.1rem;'>
-                Prepare to showcase your skills through an AI-powered interview process
+                Prepare to showcase your skills through an AI-powered adaptive interview process
             </p>
         </div>
         """, unsafe_allow_html=True)
@@ -556,8 +665,8 @@ def show_welcome_screen():
         steps = [
             (" **Introduction**", "Share your background, skills, and relevant experience"),
             (" **AI Analysis**", "Our system evaluates your technical profile"),
-            (" **Adaptive Questions**", "Answer 7-8 tailored technical questions"),
-            (" **Real-time Interaction**", "Engage with our AI interview system"),
+            (" **Adaptive Questions**", "Answer AI-generated tailored technical questions"),
+            (" **Dynamic Follow-ups**", "Questions adapt based on your previous answers"),
             (" **Comprehensive Review**", "HR team receives detailed analysis")
         ]
         
@@ -591,6 +700,15 @@ def show_welcome_screen():
                 ✓ {tip}
             </div>
             """, unsafe_allow_html=True)
+        
+        # AI-Powered note
+        st.markdown("""
+        <div class='custom-success'>
+            <h4 style='color: #4CAF50; margin-top: 0;'>🤖 AI-Powered Interview</h4>
+            <p>This interview uses AI to generate adaptive questions based on your responses, 
+            providing a more personalized and relevant assessment of your skills.</p>
+        </div>
+        """, unsafe_allow_html=True)
         
         # Start button
         st.markdown("<br>", unsafe_allow_html=True)
@@ -660,7 +778,7 @@ def show_report():
     
     st.markdown("""
     <div class='main-header' style='background: linear-gradient(135deg, #00695c 0%, #004d40 100%);'>
-        <h1>🎉 Interview Completed Successfully!</h1>
+        <h1>Interview Completed Successfully!</h1>
         <p>Thank you for participating in the virtual interview</p>
     </div>
     """, unsafe_allow_html=True)
@@ -671,18 +789,19 @@ def show_report():
         <h3 style='color: #4CAF50; margin-top: 0;'>✅ Interview Submitted</h3>
         <p style='font-size: 1.1rem;'>
             Your interview responses have been successfully submitted and analyzed.
+            The AI-powered adaptive questions provided a personalized assessment of your skills.
         </p>
     </div>
     """, unsafe_allow_html=True)
     
     # What happens next
-    st.markdown("### 📋 What happens next:")
+    st.markdown("### What happens next:")
     
     next_steps = [
         ("📄 Response Analysis", "Your answers are being processed by our AI system"),
+        ("🤖  AI Evaluation", " Adaptive question performance analyzed for skill assessment"),
         ("👥 HR Review", "The HR team will review your interview results"),
-        ("📧 Contact", "You will be contacted regarding next steps within 3-5 business days"),
-        ("📊 Internal Assessment", "Detailed scoring and analysis are for HR review only")
+        ("📧 Contact", "You will be contacted regarding next steps within 3-5 business days")
     ]
     
     for step, description in next_steps:
@@ -699,44 +818,24 @@ def show_report():
         """, unsafe_allow_html=True)
     
     # Simple stats
-    st.markdown("### 📊 Interview Summary")
+    st.markdown("### Summary")
+
+    st.metric("Questions Answered", len(st.session_state.question_evaluations))
+
     
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Questions Answered", len(st.session_state.question_evaluations))
-    with col2:
-        profile = st.session_state.candidate_profile
-        st.metric("Experience Level", profile.get("experience_level", "N/A").title())
-    with col3:
-        skills = profile.get("skills", [])
-        st.metric("Skills Detected", len(skills))
     
     # Restart button
     st.markdown("---")
-    st.markdown("""
-    <div style='text-align: center; margin-top: 2rem;'>
-        <p style='color: #B0BEC5; margin-bottom: 1rem;'>
-            Ready for another interview or want to practice more?
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+
     
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        if st.button("🔄 Start New Interview", type="primary", use_container_width=True, key="restart_interview_final"):
-            # Reset session state
-            for key in list(st.session_state.keys()):
-                del st.session_state[key]
-            init_session_state()
-            st.rerun()
 
 def main():
     """Main application function"""
     # Header
     st.markdown("""
     <div class='main-header'>
-        <h1>Virtual HR Interviewer</h1>
-        <p>AI-Powered Technical & Behavioral Screening Platform</p>
+        <h1>Virtual HR</h1>
+        <p>AI-Powered Adaptive Technical & Behavioral Screening Platform</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -747,7 +846,7 @@ def main():
         
         if st.session_state.interview_active:
             # Progress
-            total_questions = len(st.session_state.questions)
+            total_questions = st.session_state.total_questions_to_ask
             progress = min(st.session_state.current_question_index / total_questions, 1.0)
             
             st.markdown("**Progress**")
@@ -775,11 +874,23 @@ def main():
                 profile = st.session_state.get("candidate_profile", {})
                 st.metric("Experience", profile.get("experience_level", "Not set"))
                 st.metric("Primary Skill", profile.get("primary_skill", "Not set"))
+                
+                if st.session_state.questions:
+                    st.markdown("**Question Type**")
+                    current_idx = st.session_state.current_question_index
+                    if current_idx > 0 and current_idx <= len(st.session_state.questions):
+                        question = st.session_state.questions[current_idx - 1]
+                        if any(word in question.lower() for word in ["team", "project", "challenge", "disagreement"]):
+                            st.markdown("Behavioral")
+                        else:
+                            st.markdown("Technical")
         
         elif st.session_state.interview_completed:
             st.markdown("### ✅ Interview Complete")
             st.markdown("Your interview has been successfully submitted.")
             st.markdown("---")
+            if st.session_state.overall_score > 0:
+                st.metric("Overall Score", f"{st.session_state.overall_score:.1f}/10")
         
         # About section
         st.markdown("---")
@@ -787,13 +898,13 @@ def main():
         st.markdown("""
         <div style='background: #1e1e2e; padding: 1rem; border-radius: 8px;'>
             <div style='display: flex; align-items: center; gap: 10px; margin-bottom: 0.5rem;'>
-                <span>🧠</span><span>AI Analysis</span>
+                <span>🤖</span><span>AI-Generated Questions</span>
             </div>
             <div style='display: flex; align-items: center; gap: 10px; margin-bottom: 0.5rem;'>
-                <span>🔄</span><span>Adaptive Questions</span>
+                <span>🔄</span><span>Adaptive Follow-ups</span>
             </div>
             <div style='display: flex; align-items: center; gap: 10px; margin-bottom: 0.5rem;'>
-                <span>📊</span><span>Real-time Feedback</span>
+                <span>📊</span><span>Real-time Analysis</span>
             </div>
             <div style='display: flex; align-items: center; gap: 10px;'>
                 <span>📝</span><span>Detailed Reports</span>
@@ -840,12 +951,14 @@ def save_interview_report():
             "display_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "candidate_profile": st.session_state.candidate_profile,
             "question_evaluations": st.session_state.question_evaluations,
+            "questions_asked": st.session_state.questions[:len(st.session_state.question_evaluations)],  # ADDED: Track which questions were asked
             "overall_score": st.session_state.overall_score,
             "final_score": st.session_state.final_score,
             "introduction_analyzed": st.session_state.introduction_analyzed,
             "total_questions_answered": len(st.session_state.question_evaluations),
-            "total_questions": len(st.session_state.questions),
-            "messages": st.session_state.messages[:5] if st.session_state.messages else []
+            "total_questions": st.session_state.total_questions_to_ask,
+            "messages": st.session_state.messages[:5] if st.session_state.messages else [],
+            "adaptive_interview": True  # ADDED: Flag indicating adaptive questions were used
         }
         
         # DEBUG: Print what we're saving
@@ -896,6 +1009,7 @@ def generate_readable_report(report_data: dict) -> str:
     
     # Basic info with safe access
     report += f"Report Generated: {report_data.get('timestamp', 'N/A')}\n"
+    report += f"Interview Type: {'AI Adaptive' if report_data.get('adaptive_interview', False) else 'Standard'}\n"
     
     # Use get() with default values
     total_questions = report_data.get('total_questions_answered', 
@@ -925,11 +1039,18 @@ def generate_readable_report(report_data: dict) -> str:
     report += "-" * 40 + "\n"
     
     evaluations = report_data.get('question_evaluations', [])
+    questions_asked = report_data.get('questions_asked', [])
+    
     for i, eval_data in enumerate(evaluations):
         evaluation = eval_data.get('evaluation', {})
         score = evaluation.get("overall", 0)
         
-        report += f"\nQuestion {i+1}: {eval_data.get('question', 'N/A')}\n"
+        # Get the actual question asked
+        question = eval_data.get('question', 'N/A')
+        if i < len(questions_asked):
+            question = questions_asked[i]
+        
+        report += f"\nQuestion {i+1}: {question}\n"
         report += f"Score: {score}/10\n"
         
         # Category scores with safe access

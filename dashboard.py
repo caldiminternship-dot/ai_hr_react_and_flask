@@ -284,17 +284,17 @@ def main():
         
         # Score range filter - FIXED VERSION
         scores = [r.get('overall_score', 0) for r in reports]
-        min_score = min(scores) if scores else 0
-        max_score = max(scores) if scores else 10
-        
+ 
         # Always use 0-10 range for consistency
         score_range = st.slider(
             "Overall Score Range",
             0.0,  # Min value
             10.0, # Max value
-            (float(min_score), float(max_score)),  # Default range
+            (6.5, 10.0),  # CHANGED: Set default to >= 6.5
             0.1   # Step
         )
+
+        show_rejected = st.checkbox("Include rejected candidates", value=False)
         
         # Date filter with better error handling
         valid_dates = []
@@ -345,6 +345,12 @@ def main():
         
         # Score filter
         overall_score = report.get('overall_score', 0)
+        
+        # NEW LOGIC: Apply show_rejected setting
+        if not show_rejected:
+            # When checkbox is unchecked, enforce minimum 6.5 threshold
+            if overall_score < 6.5:
+                continue  # Skip this report
         
         # Date filter
         date_match = True
@@ -527,13 +533,17 @@ def main():
         if filtered_reports:
             # Create summary DataFrame
             summary_data = []
+            # In the summary_data creation loop, ADD a 'Status' column:
             for report in filtered_reports:
                 profile = report['candidate_profile']
+                overall_score = report.get('overall_score', 0)
+                
                 summary_data.append({
                     'Date': report.get('display_date', 'N/A'),
                     'Experience': profile.get('experience_level', 'N/A'),
                     'Primary Skill': profile.get('primary_skill', 'N/A'),
                     'Overall Score': report.get('overall_score', 0),
+                    'Status': 'Selected' if overall_score >= 6.5 else 'Rejected',  # NEW COLUMN
                     'Intro Score': profile.get('intro_score', 0),
                     'Questions': len(report.get('question_evaluations', [])),
                     'Confidence': profile.get('confidence', 'N/A'),
@@ -548,7 +558,7 @@ def main():
             # Statistics
             st.subheader("Key Statistics")
             
-            col1, col2, col3 = st.columns(3)
+            col1, col2, col3, col4 = st.columns(4)
             with col1:
                 # Score distribution
                 scores = df['Overall Score'].tolist()
@@ -569,6 +579,14 @@ def main():
                 st.write("**Primary Skill Distribution:**")
                 for skill, count in skill_counts.items():
                     st.write(f"{skill}: {count}")
+
+            with col4:  # Or create a new column
+                # Status distribution
+                status_counts = df['Status'].value_counts()
+                st.write("**Selection Status:**")
+                for status, count in status_counts.items():
+                    color = "green" if "Selected" in status else "red" # type: ignore
+                    st.markdown(f"<span style='color:{color}; font-weight:bold'>{status}: {count}</span>", unsafe_allow_html=True)
             
             # Score distribution chart
             st.subheader("Score Distribution Chart")
@@ -586,3 +604,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

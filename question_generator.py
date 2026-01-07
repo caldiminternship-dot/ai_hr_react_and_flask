@@ -37,7 +37,7 @@ class QuestionGenerator:
                 max_tokens=200
             )
             
-            questions_text = response.choices[0].message.content
+            questions_text = response.choices[0].message.content # pyright: ignore[reportAttributeAccessIssue]
             questions = []
             
             # Parse the response
@@ -108,7 +108,7 @@ class QuestionGenerator:
                 max_tokens=100
             )
             
-            followup_question = response.choices[0].message.content.strip()
+            followup_question = response.choices[0].message.content.strip() # pyright: ignore[reportAttributeAccessIssue]
             
             # Clean up the question
             if followup_question.startswith('"') and followup_question.endswith('"'):
@@ -153,7 +153,7 @@ class QuestionGenerator:
                 max_tokens=80
             )
             
-            question = response.choices[0].message.content.strip()
+            question = response.choices[0].message.content.strip() # type: ignore
             return question
             
         except Exception as e:

@@ -44,7 +44,7 @@ class ResponseAnalyzer:
                 skill_counts["data"] += 1
         
         # Determine primary skill
-        primary_skill = max(skill_counts, key=skill_counts.get)
+        primary_skill = max(skill_counts, key=skill_counts.get) # type: ignore
         if skill_counts[primary_skill] == 0:
             primary_skill = "frontend"  # Default
         
@@ -94,7 +94,7 @@ class ResponseAnalyzer:
             "intro_score": min(10, max(1, intro_score))  # Keep between 1-10
         }
         
-    def analyze_introduction(self, response: str) -> Dict:
+    def analyze_introduction(self, response: str) -> Dict: # type: ignore
         """Analyze candidate's introduction with better AI analysis"""
         prompt = f"""
         Analyze this candidate introduction comprehensively:
@@ -128,7 +128,7 @@ class ResponseAnalyzer:
                 max_tokens=200
             )
             
-            analysis_text = response_analysis.choices[0].message.content
+            analysis_text = response_analysis.choices[0].message.content # type: ignore
             return self._parse_intro_analysis(analysis_text, response)
         except Exception as e:
             print(f"AI analysis error: {e}")
@@ -360,7 +360,7 @@ class ResponseAnalyzer:
                     skill_scores[skill] += 1
         
         # Update primary skill if we found strong indicators
-        max_skill = max(skill_scores, key=skill_scores.get)
+        max_skill = max(skill_scores, key=skill_scores.get) # type: ignore
         if skill_scores[max_skill] > 2:  # Only update if we have strong evidence
             current_result["primary_skill"] = max_skill
         
@@ -421,7 +421,7 @@ class ResponseAnalyzer:
                 if any(indicator in skill.lower() for indicator in indicators):
                     skill_scores[skill_type] += 1
         
-        primary_skill = max(skill_scores, key=skill_scores.get)
+        primary_skill = max(skill_scores, key=skill_scores.get) # type: ignore
         if skill_scores[primary_skill] == 0:
             primary_skill = "backend"
         
@@ -505,33 +505,33 @@ class ResponseAnalyzer:
         
         # Use AI for detailed evaluation
         prompt = f"""
-        Evaluate this technical interview answer:
-        
-        Question: {question}
-        Answer: {answer}
-        
-        Score on a scale of 1-10 for each category:
-        1. Technical Accuracy (1-10): How correct is the technical information?
-        2. Completeness (1-10): Does it fully address the question?
-        3. Clarity (1-10): Is it well-structured and easy to understand?
-        4. Depth (1-10): Does it show deep understanding or just surface-level?
-        5. Practicality (1-10): Does it include real-world examples or applications?
-        
-        Also consider:
-        - Word count: {word_count} (ideal: 80-200 words)
-        - Technical terms used appropriately?
-        - Examples provided?
-        - Structure and organization?
-        
-        Provide scores in this exact format:
-        Technical Accuracy: [score]
-        Completeness: [score]
-        Clarity: [score]
-        Depth: [score]
-        Practicality: [score]
-        Overall: [average score]
-        Strengths: [1-2 key strengths]
-        Weaknesses: [1-2 areas for improvement]
+            Evaluate this technical interview answer:
+            
+            Question: {question}
+            Answer: {answer}
+            
+            Score on a scale of 1-10 for each category:
+            1. Technical Accuracy (1-10): How correct is the technical information?
+            2. Completeness (1-10): Does it fully address the question?
+            3. Clarity (1-10): Is it well-structured and easy to understand?
+            4. Depth (1-10): Does it show deep understanding or just surface-level?
+            5. Practicality (1-10): Does it include real-world examples or applications?
+            
+            Also consider:
+            - Word count: {word_count} (ideal: 80-200 words)
+            - Technical terms used appropriately?
+            - Examples provided?
+            - Structure and organization?
+            
+            Provide scores in this exact format:
+            Technical Accuracy: [score]
+            Completeness: [score]
+            Clarity: [score]
+            Depth: [score]
+            Practicality: [score]
+            Overall: [average score]
+            Strengths: [1-2 key strengths]
+            Weaknesses: [1-2 areas for improvement]
         """
         
         try:
@@ -545,7 +545,7 @@ class ResponseAnalyzer:
                 max_tokens=250
             )
             
-            eval_text = evaluation.choices[0].message.content
+            eval_text = evaluation.choices[0].message.content # type: ignore
             return self._parse_detailed_evaluation(eval_text, word_count, metrics)
             
         except Exception as e:
@@ -739,22 +739,37 @@ class ResponseAnalyzer:
             return True, "poor_response"
         
         return False, ""
+    
     def analyze_introduction(self, response: str) -> Dict:
         """Analyze candidate's introduction with better AI analysis"""
         prompt = f"""
-        Analyze this candidate introduction comprehensively:
-        
-        Response: {response[:500]}  # Limit to first 500 chars
-        
-        Provide analysis in this exact format:
-        Skills: [comma separated list of specific technical skills]
-        Experience Level: [junior/mid/senior]
-        Primary Technical Area: [backend/frontend/fullstack/devops/data/mobile]
-        Confidence: [low/medium/high]
-        Communication: [weak/adequate/strong]
-        Projects Mentioned: [number]
-        
-        Be specific and base your analysis on the actual content.
+            Analyze the candidate's introduction as a technical recruiter conducting a
+            medium-difficulty interview.
+
+            Response:
+            {response[:500]}
+
+            Evaluation guidelines:
+            - Be fair and slightly liberal in interpretation, but do NOT overestimate the
+            candidate’s skills, experience, or confidence beyond what is clearly stated.
+            - Base all judgments strictly on the content provided.
+            - Assume a junior-to-mid level candidate unless strong evidence suggests otherwise.
+            - Avoid generic assumptions or exaggerated classifications.
+
+            Provide the analysis in EXACTLY the following format:
+
+            Skills: [comma-separated list of specific technical skills explicitly mentioned or strongly implied]
+            Experience Level: [junior/mid/senior]
+            Primary Technical Area: [backend/frontend/fullstack/devops/data/mobile]
+            Confidence: [low/medium/high]
+            Communication: [weak/adequate/strong]
+            Projects Mentioned: [number]
+
+            Evaluation focus:
+            - Technical skills demonstrated (not guessed)
+            - Clarity and structure of the introduction
+            - Evidence of hands-on or project experience
+            - Professional tone and confidence level
         """
         
         try:
@@ -762,17 +777,29 @@ class ResponseAnalyzer:
             response_analysis = openai.ChatCompletion.create(
                 model="gpt-3.5-turbo",
                 messages=[
-                    {"role": "system", "content": "You are a technical recruiter analyzing candidate responses. Be specific and detailed."},
+                    {"role": "system", "content": '''
+                            You are a technical recruiter evaluating candidate responses during an interview. Analyze each answer carefully and provide specific, detailed, and objective feedback based strictly on the content provided.
+                            Evaluate the candidate liberally and fairly, recognizing effort, clarity, and correct reasoning, but do not inflate scores or assessments beyond what the response genuinely demonstrates.
+                            The interview difficulty level should be considered medium, so expectations should align with a competent junior-to-mid-level candidate rather than an expert.
+                            Focus your evaluation on:
+                            Technical correctness and conceptual understanding
+                            Clarity of explanation and communication
+                            Practical thinking and real-world relevance
+                            Completeness of the response relative to the question
+                            Be balanced in your judgment: acknowledge strengths clearly, point out gaps constructively, and avoid overly harsh or overly generous evaluations. The goal is to provide a realistic assessment of the candidate’s readiness at a medium-level technical interview. 
+                    '''},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.7,  # Slightly higher temperature for more varied responses
                 max_tokens=250
             )
             
-            analysis_text = response_analysis.choices[0].message.content
-            print(f"[DEBUG] AI Response:\n{analysis_text}")
+            analysis_text = response_analysis.choices[0].message.content # type: ignore
+            # (f"[DEBUG] AI Response:\n{analysis_text}")
             
             return self._parse_intro_analysis(analysis_text, response)
         except Exception as e:
             print(f"[DEBUG] AI analysis error: {e}")
             return self._enhanced_fallback_analysis(response)
+        
+    

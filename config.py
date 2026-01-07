@@ -1,7 +1,9 @@
 import os
-
+from dotenv import load_dotenv
 # Configuration settings
-OPENROUTER_API_KEY = "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"
+
+load_dotenv()
+OPENROUTER_API_KEY = os.getenv("API_KEY") 
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 # Interview settings

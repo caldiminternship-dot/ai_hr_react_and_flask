@@ -30,265 +30,499 @@ st.set_page_config(
 # Professional Dark Theme CSS
 css = """
 <style>
-    /* Base styling */
+
+
+
+   
+    /* ===== BASE THEME ===== */
     .stApp {
-        background-color: #0E1117;
-        color: #FAFAFA;
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        color: #f8fafc;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
-    
-    /* Main containers */
+
+    /* ===== HEADER STYLING ===== */
     .main-header {
-        text-align: center;
-        padding: 2.5rem 1rem;
-        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-        border-radius: 12px;
-        margin-bottom: 2rem;
-        border: 1px solid #2d3748;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.95) 100%);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 20px;
+        padding: 2.5rem 2rem;
+        margin: 1rem auto 2rem;
+        max-width: 95%;
+        box-shadow: 
+            0 10px 25px rgba(0, 0, 0, 0.3),
+            inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        position: relative;
+        overflow: hidden;
     }
-    
+
+    .main-header::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: linear-gradient(90deg, #6366f1, #8b5cf6, #ec4899);
+    }
+
     .main-header h1 {
-        color: #64B5F6;
+        background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
         font-size: 2.8rem;
-        font-weight: 700;
-        margin-bottom: 0.5rem;
-        text-shadow: 0 2px 4px rgba(0,0,0,0.4);
+        font-weight: 800;
+        letter-spacing: -0.5px;
+        margin-bottom: 0.75rem;
+        text-align: center;
     }
-    
+
     .main-header p {
-        color: #B0BEC5;
-        font-size: 1.2rem;
+        color: #94a3b8;
+        font-size: 1.1rem;
         font-weight: 400;
-        opacity: 0.9;
+        text-align: center;
+        max-width: 800px;
+        margin: 0 auto;
+        line-height: 1.6;
     }
-    
-    /* Card styling */
+    .header {
+        text-align:center;
+        padding: 1.5rem 1rem;
+        margin: 0.5rem 0 1.5rem;
+    }
+    /* ===== CARD STYLING ===== */
     .stCard {
-        background-color: #1e1e2e;
-        border-radius: 10px;
-        padding: 1.5rem;
-        border: 1px solid #2d3748;
-        margin-bottom: 1rem;
+        background: rgba(30, 41, 59, 0.7);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 16px;
+        padding: 1.75rem;
+        margin-bottom: 1.25rem;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     }
-    
-    /* Chat messages */
+
+    .stCard:hover {
+        border-color: rgba(99, 102, 241, 0.3);
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2);
+    }
+
+    /* ===== CHAT INTERFACE ===== */
     .chat-container {
-        background-color: #1a1a2e;
-        border-radius: 10px;
+        background: rgba(15, 23, 42, 0.8);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 16px;
         padding: 1.5rem;
         margin-bottom: 1.5rem;
-        border: 1px solid #2d3748;
+        backdrop-filter: blur(10px);
     }
-    
+
     .chat-message {
-        padding: 1rem;
-        border-radius: 8px;
-        margin: 0.8rem 0;
+        padding: 1.25rem;
+        border-radius: 14px;
+        margin: 1rem 0;
         border-left: 4px solid;
+        animation: slideIn 0.3s ease-out;
     }
-    
+
+    @keyframes slideIn {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
     .interviewer-message {
-        background: rgba(100, 181, 246, 0.1);
-        border-color: #64B5F6;
+        background: linear-gradient(135deg, rgba(79, 70, 229, 0.15) 0%, rgba(67, 56, 202, 0.1) 100%);
+        border-color: #4f46e5;
+        margin-right: 2rem;
     }
-    
+
     .candidate-message {
-        background: rgba(76, 175, 80, 0.1);
-        border-color: #4CAF50;
+        background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.1) 100%);
+        border-color: #10b981;
+        margin-left: 2rem;
     }
-    
+
     .system-message {
-        background: rgba(255, 193, 7, 0.1);
-        border-color: #FFC107;
+        background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(217, 119, 6, 0.1) 100%);
+        border-color: #f59e0b;
+        margin: 1rem auto;
+        max-width: 90%;
     }
-    
-    /* Buttons */
+
+    /* ===== BUTTON STYLING ===== */
     .stButton > button {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
         color: white;
         border: none;
-        border-radius: 8px;
-        padding: 0.6rem 1.5rem;
+        border-radius: 12px;
+        padding: 0.75rem 1.5rem;
         font-weight: 600;
+        font-size: 0.95rem;
         transition: all 0.3s ease;
+        box-shadow: 0 4px 6px -1px rgba(99, 102, 241, 0.2);
+        position: relative;
+        overflow: hidden;
     }
-    
+
+    .stButton > button::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+        transition: left 0.6s;
+    }
+
     .stButton > button:hover {
         transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        box-shadow: 0 8px 15px -3px rgba(99, 102, 241, 0.3);
     }
-    
-    .primary-button > button {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+
+    .stButton > button:hover::before {
+        left: 100%;
     }
-    
-    .secondary-button > button {
-        background: linear-gradient(135deg, #434343 0%, #000000 100%);
+
+    .stButton > button:active {
+        transform: translateY(0);
     }
-    
-    /* Metrics and stats */
-    .stMetric {
-        background-color: #1e1e2e;
-        border-radius: 10px;
+
+    /* ===== INPUT FIELDS ===== */
+    .stTextArea textarea {
+        background: rgba(15, 23, 42, 0.8);
+        color: #f8fafc;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
         padding: 1rem;
-        border: 1px solid #2d3748;
+        font-size: 1rem;
+        transition: all 0.3s ease;
+        min-height: 150px;
     }
-    
+
+    .stTextArea textarea:focus {
+        border-color: #6366f1;
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        outline: none;
+    }
+
+    .stTextArea textarea::placeholder {
+        color: #64748b;
+    }
+
+    /* ===== METRIC CARDS ===== */
+    .stMetric {
+        background: rgba(30, 41, 59, 0.7);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 16px;
+        padding: 1.25rem;
+        margin: 0.5rem 0;
+        backdrop-filter: blur(10px);
+    }
+
     .stMetric > div[data-testid="stMetricLabel"] {
-        color: #B0BEC5;
+        color: #94a3b8;
         font-size: 0.9rem;
         font-weight: 500;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
     }
-    
+
     .stMetric > div[data-testid="stMetricValue"] {
-        color: #64B5F6;
-        font-size: 1.8rem;
+        color: #f8fafc;
+        font-size: 2rem;
         font-weight: 700;
+        margin: 0.5rem 0;
     }
-    
-    .stMetric > div[data-testid="stMetricDelta"] {
-        color: #4CAF50;
-    }
-    
-    /* Text areas and inputs */
-    .stTextArea textarea {
-        background-color: #1e1e2e;
-        color: #FAFAFA;
-        border: 1px solid #2d3748;
-        border-radius: 8px;
-        padding: 1rem;
-    }
-    
-    .stTextArea textarea:focus {
-        border-color: #64B5F6;
-        box-shadow: 0 0 0 2px rgba(100, 181, 246, 0.2);
-    }
-    
-    /* Progress bar */
+
+    /* ===== PROGRESS BAR ===== */
     .stProgress > div > div > div {
-        background: linear-gradient(90deg, #667eea, #764ba2);
+        background: linear-gradient(90deg, #6366f1, #8b5cf6, #ec4899);
+        border-radius: 10px;
     }
-    
-    /* Sidebar */
+
+    .stProgress > div {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 10px;
+        height: 10px;
+    }
+
+    /* ===== SIDEBAR ===== */
     section[data-testid="stSidebar"] {
-        background-color: #1a1a2e;
-        border-right: 1px solid #2d3748;
+        background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+        border-right: 1px solid rgba(255, 255, 255, 0.1);
     }
-    
+
     section[data-testid="stSidebar"] .stButton > button {
+        margin-bottom: 0.75rem;
         width: 100%;
-        margin-bottom: 0.5rem;
     }
-    
-    /* Tabs */
+
+    /* ===== TABS ===== */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-        background-color: #1e1e2e;
-        padding: 4px;
-        border-radius: 8px;
+        gap: 4px;
+        background: rgba(30, 41, 59, 0.5);
+        padding: 6px;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
     }
-    
+
     .stTabs [data-baseweb="tab"] {
-        background-color: transparent;
-        border-radius: 6px;
-        color: #B0BEC5;
-    }
-    
-    .stTabs [aria-selected="true"] {
-        background-color: #64B5F6;
-        color: #0E1117;
-        font-weight: 600;
-    }
-    
-    /* Info boxes */
-    .stInfo {
-        background-color: rgba(33, 150, 243, 0.1);
-        border-left: 4px solid #2196F3;
-    }
-    
-    .stSuccess {
-        background-color: rgba(76, 175, 80, 0.1);
-        border-left: 4px solid #4CAF50;
-    }
-    
-    .stWarning {
-        background-color: rgba(255, 193, 7, 0.1);
-        border-left: 4px solid #FFC107;
-    }
-    
-    .stError {
-        background-color: rgba(244, 67, 54, 0.1);
-        border-left: 4px solid #F44336;
-    }
-    
-    /* Expanders */
-    .streamlit-expanderHeader {
-        background-color: #1e1e2e;
-        color: #FAFAFA;
-        border: 1px solid #2d3748;
+        background: transparent;
         border-radius: 8px;
+        color: #94a3b8;
+        font-weight: 500;
+        padding: 0.75rem 1.5rem;
+        transition: all 0.3s ease;
     }
-    
+
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        color: white;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    /* ===== EXPANDER ===== */
+    .streamlit-expanderHeader {
+        background: rgba(30, 41, 59, 0.7);
+        color: #f8fafc;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        font-weight: 600;
+        padding: 1rem 1.25rem;
+    }
+
     .streamlit-expanderContent {
-        background-color: #1a1a2e;
-        border: 1px solid #2d3748;
+        background: rgba(15, 23, 42, 0.8);
+        border: 1px solid rgba(255, 255, 255, 0.1);
         border-top: none;
-        border-radius: 0 0 8px 8px;
+        border-radius: 0 0 12px 12px;
+        padding: 1.25rem;
     }
-    
-    /* Divider */
+
+    /* ===== STATUS MESSAGES ===== */
+    .stSuccess {
+        background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.1) 100%);
+        border-left: 4px solid #10b981;
+        border-radius: 12px;
+        padding: 1.25rem;
+        margin: 1rem 0;
+    }
+
+    .stWarning {
+        background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(217, 119, 6, 0.1) 100%);
+        border-left: 4px solid #f59e0b;
+        border-radius: 12px;
+        padding: 1.25rem;
+        margin: 1rem 0;
+    }
+
+    .stError {
+        background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(220, 38, 38, 0.1) 100%);
+        border-left: 4px solid #ef4444;
+        border-radius: 12px;
+        padding: 1.25rem;
+        margin: 1rem 0;
+    }
+
+    .stInfo {
+        background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(37, 99, 235, 0.1) 100%);
+        border-left: 4px solid #3b82f6;
+        border-radius: 12px;
+        padding: 1.25rem;
+        margin: 1rem 0;
+    }
+
+    /* ===== CUSTOM STATUS ===== */
+    .custom-success {
+        background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.1) 100%);
+        border-left: 4px solid #10b981;
+        border-radius: 14px;
+        padding: 1.5rem;
+        margin: 1.25rem 0;
+    }
+
+    .custom-warning {
+        background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(217, 119, 6, 0.1) 100%);
+        border-left: 4px solid #f59e0b;
+        border-radius: 14px;
+        padding: 1.5rem;
+        margin: 1.25rem 0;
+    }
+
+    /* ===== TYPOGRAPHY ===== */
+    h1, h2, h3, h4, h5, h6 {
+        color: #f1f5f9;
+        font-weight: 700;
+        letter-spacing: -0.025em;
+    }
+
+    h1 {
+        font-size: 2.5rem;
+        background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+
+    h2 {
+        font-size: 2rem;
+        margin-top: 1.5rem;
+        margin-bottom: 1rem;
+    }
+
+    p, div, span {
+        color: #cbd5e1;
+        line-height: 1.6;
+    }
+
+    /* ===== DIVIDER ===== */
     hr {
-        border-color: #2d3748;
+        border: none;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
         margin: 2rem 0;
     }
-    
-    /* Headers */
-    h1, h2, h3, h4, h5, h6 {
-        color: #E2E8F0;
-    }
-    
-    /* Text */
-    p, div, span {
-        color: #CBD5E0;
-    }
-    
-    /* Code blocks */
+
+    /* ===== CODE BLOCKS ===== */
     code {
-        background-color: #2d3748;
-        color: #81E6D9;
-        padding: 2px 6px;
+        background: rgba(30, 41, 59, 0.8);
+        color: #7dd3fc;
+        padding: 0.25rem 0.5rem;
+        border-radius: 6px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.9rem;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    /* ===== SCROLLBAR STYLING ===== */
+    ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: rgba(15, 23, 42, 0.5);
         border-radius: 4px;
-        font-family: 'Courier New', monospace;
     }
-    
-    /* Placeholder text */
-    ::placeholder {
-        color: #718096;
+
+    ::-webkit-scrollbar-thumb {
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        border-radius: 4px;
     }
-    
-    /* Custom success/warning/error styling */
-    .custom-success {
-        background: linear-gradient(135deg, rgba(76, 175, 80, 0.1), rgba(76, 175, 80, 0.05));
-        border-left: 4px solid #4CAF50;
-        padding: 1rem;
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
+    }
+
+    /* ===== GLASS EFFECT UTILITY ===== */
+    .glass-effect {
+        background: rgba(30, 41, 59, 0.7);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 16px;
+    }
+
+    /* ===== TOOLTIP STYLING ===== */
+    .stTooltip {
+        background: rgba(15, 23, 42, 0.95);
+        border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 8px;
-        margin: 1rem 0;
+        padding: 0.75rem;
+        font-size: 0.9rem;
     }
-    
-    .custom-warning {
-        background: linear-gradient(135deg, rgba(255, 193, 7, 0.1), rgba(255, 193, 7, 0.05));
-        border-left: 4px solid #FFC107;
-        padding: 1rem;
-        border-radius: 8px;
-        margin: 1rem 0;
+
+    /* ===== ANIMATIONS ===== */
+    @keyframes pulse {
+        0%, 100% {
+            opacity: 1;
+        }
+        50% {
+            opacity: 0.7;
+        }
     }
-    
-    .custom-error {
-        background: linear-gradient(135deg, rgba(244, 67, 54, 0.1), rgba(244, 67, 54, 0.05));
-        border-left: 4px solid #F44336;
+
+    .pulse-animation {
+        animation: pulse 2s infinite;
+    }
+
+    /* ===== RESPONSIVE DESIGN ===== */
+    @media (max-width: 768px) {
+        .main-header {
+            padding: 1.5rem 1rem;
+            margin: 0.5rem 0 1.5rem;
+        }
+
+        
+        .main-header h1 {
+            font-size: 2rem;
+        }
+        
+        .stCard {
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+        }
+        
+        .chat-message {
+            padding: 1rem;
+            margin: 0.75rem 0;
+        }
+        
+        .stButton > button {
+            padding: 0.625rem 1.25rem;
+            font-size: 0.9rem;
+        }
+    }
+
+    /* ===== FOCUS STATES ===== */
+    :focus-visible {
+        outline: 2px solid #6366f1;
+        outline-offset: 2px;
+        border-radius: 4px;
+    }
+
+    /* ===== SELECTION COLOR ===== */
+    ::selection {
+        background: rgba(99, 102, 241, 0.3);
+        color: white;
+    }
+
+    /* ===== LOADING SPINNER ===== */
+    .stSpinner > div {
+        border-color: #6366f1 transparent transparent transparent;
+    }
+
+    /* ===== DATA FRAME STYLING ===== */
+    .dataframe {
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        overflow: hidden;
+    }
+
+    /* ===== FORM STYLING ===== */
+    .stSelectbox, .stMultiselect, .stNumberInput, .stDateInput {
+        background: rgba(15, 23, 42, 0.8);
+        border-radius: 12px;
+    }
+
+    /* ===== RADIO BUTTONS ===== */
+    .stRadio > div {
+        background: rgba(15, 23, 42, 0.8);
         padding: 1rem;
-        border-radius: 8px;
-        margin: 1rem 0;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    /* ===== CHECKBOX STYLING ===== */
+    .stCheckbox > label {
+        color: #cbd5e1;
     }
 </style>
 """
@@ -314,7 +548,7 @@ def init_session_state():
         'termination_reason': '',
         'termination_log': [],
         'current_response': '',
-        'total_questions_to_ask': 3,  # ADDED: Configurable number of questions
+        'total_questions_to_ask': 15,  # ADDED: Configurable number of questions
         'questions_generated': False,  # ADDED: Track if questions have been generated
     }
     
@@ -399,6 +633,24 @@ def process_response(response_text):
         st.warning("Please enter a response before submitting.")
         return
     
+        # Special handling for tab switching termination
+    if "session terminated due to tab switching" in response_text.lower():
+        st.session_state.interview_terminated = True
+        st.session_state.termination_reason = "misconduct"
+        st.session_state.interview_active = False
+        
+        # Log termination
+        if "termination_log" not in st.session_state:
+            st.session_state.termination_log = []
+        st.session_state.termination_log.append({
+            "time": datetime.now().strftime("%H:%M:%S"),
+            "reason": "misconduct",
+            "response": "Tab switching detected multiple times"
+        })
+        
+        st.rerun()
+        return
+
     # Update chat history
     st.session_state.messages.append({
         "role": "candidate",
@@ -567,6 +819,30 @@ def process_response(response_text):
 def show_interview_in_progress():
     """Display interview interface when interview is active"""
     
+    # Check if we need to auto-submit due to tab switching
+    if st.session_state.get('tab_switch_count', 0) >= 2 and not st.session_state.get('auto_submit_triggered', False):
+        st.session_state.auto_submit_triggered = True
+        st.session_state.current_response = "session terminated due to tab switching"
+        
+        # Use a callback to auto-submit
+        if st.button("Auto Submit Trigger", key="auto_submit_trigger", help="hidden", type="primary", visible=False):
+            process_response(st.session_state.current_response)
+        
+        # Trigger the button click via JavaScript
+        st.markdown("""
+        <script>
+        setTimeout(() => {
+            const buttons = document.querySelectorAll('button');
+            for (let button of buttons) {
+                if (button.innerText.includes('Auto Submit Trigger')) {
+                    button.click();
+                    break;
+                }
+            }
+        }, 100);
+        </script>
+        """, unsafe_allow_html=True)
+    
     st.markdown("""
     <div class='main-header'>
         <h1>Interview in Progress</h1>
@@ -613,7 +889,7 @@ def show_interview_in_progress():
     st.markdown("---")
     total_questions = st.session_state.total_questions_to_ask
     progress = min(st.session_state.current_question_index / total_questions, 1.0)
-    st.progress(progress, text=f"Progress: Question {st.session_state.current_question_index} of {total_questions}")
+   # st.progress(progress, text=f"Progress: Question {st.session_state.current_question_index} of {total_questions}")
     
     # Display adaptive questions info if available
     if st.session_state.introduction_analyzed and st.session_state.questions:
@@ -640,12 +916,7 @@ def show_interview_in_progress():
 def show_welcome_screen():
     """Display welcome screen"""
     
-    st.markdown("""
-    <div class='main-header'>
-        <h1>🚀 Virtual HR Interviewer</h1>
-        <p>AI-Powered Technical Screening Platform</p>
-    </div>
-    """, unsafe_allow_html=True)
+
     
     # Welcome content in a centered layout
     col1, col2, col3 = st.columns([1, 3, 1])
@@ -663,41 +934,23 @@ def show_welcome_screen():
         st.markdown("### 📋 How it works:")
         
         steps = [
-            (" **Introduction**", "Share your background, skills, and relevant experience"),
-            (" **AI Analysis**", "Our system evaluates your technical profile"),
-            (" **Adaptive Questions**", "Answer AI-generated tailored technical questions"),
-            (" **Dynamic Follow-ups**", "Questions adapt based on your previous answers"),
-            (" **Comprehensive Review**", "HR team receives detailed analysis")
+            (" Introduction", "Share your background, skills, and relevant experience"),
+            (" AI Analysis", "Our system evaluates your technical profile"),
+            (" Adaptive Questions", "Answer AI-generated tailored technical questions"),
+            (" Dynamic Follow-ups", "Questions adapt based on your previous answers"),
+            (" Comprehensive Review", "HR team receives detailed analysis")
         ]
         
         for icon, description in steps:
             st.markdown(f"""
             <div style='background: #1e1e2e; padding: 1rem; border-radius: 8px; margin: 0.5rem 0; border-left: 4px solid #64B5F6;'>
                 <div style='display: flex; align-items: center; gap: 10px;'>
-                    <span style='font-size: 1.5rem;'>{icon.split()[0]}</span>
+                    <span style='font-size: 1.5rem; width: 28%;'>{icon}</span>
                     <div>
                         <strong style='color: #E2E8F0;'>{' '.join(icon.split()[1:])}</strong><br>
                         <span style='color: #CBD5E0;'>{description}</span>
                     </div>
                 </div>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        # Tips section
-        st.markdown("### 💡 Tips for success:")
-        
-        tips = [
-            "Be specific about your projects and achievements",
-            "Aim for 100-200 words per answer for optimal detail",
-            "Include real-world examples and outcomes",
-            "Take your time to think before responding",
-            "Focus on clear, structured communication"
-        ]
-        
-        for tip in tips:
-            st.markdown(f"""
-            <div style='background: #1e1e2e; padding: 0.8rem 1rem; border-radius: 6px; margin: 0.3rem 0; border: 1px solid #2d3748;'>
-                ✓ {tip}
             </div>
             """, unsafe_allow_html=True)
         
@@ -714,7 +967,7 @@ def show_welcome_screen():
         st.markdown("<br>", unsafe_allow_html=True)
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
-            if st.button("Start New Interview", type="primary", use_container_width=True, key="start_interview_btn"):
+            if st.button("Start Interview", type="primary", use_container_width=True, key="start_interview_btn"):
                 st.session_state.interview_started = True
                 st.session_state.interview_active = True
                 st.rerun()
@@ -731,7 +984,7 @@ def show_termination_screen():
     
     reason = st.session_state.termination_reason
     reasons_map = {
-        "misconduct": "Inappropriate language or behavior detected",
+        "misconduct": "Inappropriate behavior detected",
         "candidate_request": "Candidate requested to end the interview",
         "poor_response": "Response quality too low to continue",
         "insufficient_response": "Response was too brief or unclear"
@@ -756,14 +1009,6 @@ def show_termination_screen():
                 """, unsafe_allow_html=True)
     
     st.markdown("---")
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        if st.button("🔄 Start New Interview", type="primary", use_container_width=True, key="start_new_elsewhere"):
-            # Reset session state
-            for key in list(st.session_state.keys()):
-                del st.session_state[key]
-            init_session_state()
-            st.rerun()
 
 def show_report():
     """Display interview completion screen"""
@@ -779,7 +1024,7 @@ def show_report():
     st.markdown("""
     <div class='main-header' style='background: linear-gradient(135deg, #00695c 0%, #004d40 100%);'>
         <h1>Interview Completed Successfully!</h1>
-        <p>Thank you for participating in the virtual interview</p>
+        <p>Thank you for participating</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -822,15 +1067,216 @@ def show_report():
 
     st.metric("Questions Answered", len(st.session_state.question_evaluations))
 
-    
-    
-    # Restart button
     st.markdown("---")
 
+# Add this JavaScript for tab switching detection
+tab_switch_js = """
+<script>
+// Tab switching detection
+let tabSwitchCount = 0;
+let lastTabSwitchTime = Date.now();
+let warningShown = false;
+
+// Track tab visibility changes
+document.addEventListener('visibilitychange', function() {
+    if (document.hidden) {
+        // Tab switched away
+        tabSwitchCount++;
+        lastTabSwitchTime = Date.now();
+        
+        // Show warning after first switch
+        if (tabSwitchCount === 1 && !warningShown) {
+            warningShown = true;
+            // Send warning to Streamlit
+            const data = {tabSwitches: tabSwitchCount, action: 'warning'};
+            window.parent.postMessage(data, '*');
+        }
+        
+        // Terminate after second switch
+        if (tabSwitchCount >= 2) {
+            // Send termination signal to Streamlit
+            const data = {tabSwitches: tabSwitchCount, action: 'terminate', reason: 'misconduct'};
+            window.parent.postMessage(data, '*');
+        }
+    }
+});
+
+// Prevent keyboard shortcuts for opening new tabs/windows
+document.addEventListener('keydown', function(e) {
+    // Ctrl+T (new tab), Ctrl+N (new window), Ctrl+Shift+N (incognito)
+    if ((e.ctrlKey || e.metaKey) && 
+        (e.key === 't' || e.key === 'n' || (e.shiftKey && e.key === 'N'))) {
+        e.preventDefault();
+        tabSwitchCount++;
+        
+        if (tabSwitchCount >= 2) {
+            const data = {tabSwitches: tabSwitchCount, action: 'terminate', reason: 'misconduct'};
+            window.parent.postMessage(data, '*');
+        }
+    }
+});
+
+// Prevent right-click context menu for opening in new tab
+document.addEventListener('contextmenu', function(e) {
+    e.preventDefault();
+    return false;
+});
+</script>
+"""
+
+# Function to handle tab switch detection
+def handle_tab_switch():
+    """Check for tab switch events from JavaScript"""
+    if "tab_switches" not in st.session_state:
+        st.session_state.tab_switches = 0
+        st.session_state.last_tab_warning = False
     
+    # Create a unique key for the component
+    tab_key = f"tab_tracker_{st.session_state.get('current_question_index', 0)}"
+    
+    # JavaScript component that communicates with the parent
+    st.components.v1.html(f"""
+    <div id="tab-tracker"></div>
+    <script>
+        let tabSwitches = 0;
+        let warningGiven = false;
+        
+        // Listen for visibility changes
+        document.addEventListener('visibilitychange', function() {{
+            if (document.hidden) {{
+                tabSwitches++;
+                
+                // Send data to Streamlit via custom message
+                window.parent.postMessage({{
+                    type: 'TAB_SWITCH',
+                    count: tabSwitches,
+                    timestamp: new Date().toISOString()
+                }}, '*');
+            }}
+        }});
+        
+        // Listen for messages back from Streamlit
+        window.addEventListener('message', function(event) {{
+            if (event.data.type === 'TAB_SWITCH_RESPONSE') {{
+                console.log('Tab switch count:', event.data.count);
+            }}
+        }});
+    </script>
+    """, height=0)    
 
 def main():
     """Main application function"""
+    # Initialize tab switch tracking
+    if "tab_switch_count" not in st.session_state:
+        st.session_state.tab_switch_count = 0
+    if "tab_warning_given" not in st.session_state:
+        st.session_state.tab_warning_given = False
+    if "auto_submit_triggered" not in st.session_state:
+        st.session_state.auto_submit_triggered = False
+    
+    # Simple JavaScript injection for basic detection
+    if st.session_state.interview_active and not st.session_state.interview_terminated:
+        # Create a button that JavaScript can "click" to report tab switches
+        if st.button("Check Tab Status", key="tab_check_hidden", help="Hidden tab check"):
+            # This will be triggered by JavaScript
+            pass
+        
+        # Inject JavaScript
+        js_code = f"""
+        <script>
+        let tabCount = {st.session_state.tab_switch_count};
+        let warned = {str(st.session_state.tab_warning_given).lower()};
+        let autoSubmitDone = {str(st.session_state.auto_submit_triggered).lower()};
+        
+        document.addEventListener('visibilitychange', function() {{
+            if (document.hidden) {{
+                tabCount++;
+                console.log('Tab switch detected. Count:', tabCount);
+                
+                if (tabCount === 1 && !warned) {{
+                    warned = true;
+                    // Show browser alert
+                    alert('⚠️ WARNING: Tab switching detected. Next switch terminates interview.');
+                    
+                    // Update Streamlit session state
+                    const event = new Event('input', {{ bubbles: true }});
+                    document.dispatchEvent(event);
+                    
+                }} else if (tabCount >= 2 && !autoSubmitDone) {{
+                    // Terminate interview by auto-filling and submitting
+                    autoSubmitDone = true;
+                    
+                    // 1. Find the textarea
+                    const textareas = document.querySelectorAll('textarea');
+                    let interviewTextarea = null;
+                    
+                    for (let textarea of textareas) {{
+                        if (textarea.value === '' || textarea.placeholder.includes('Type your detailed response')) {{
+                            interviewTextarea = textarea;
+                            break;
+                        }}
+                    }}
+                    
+                    if (interviewTextarea) {{
+                        // 2. Set the termination message
+                        interviewTextarea.value = 'session terminated due to tab switching';
+                        
+                        // 3. Trigger input event to update Streamlit
+                        interviewTextarea.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                        
+                        // 4. Find and click the submit button
+                        setTimeout(() => {{
+                            const buttons = document.querySelectorAll('button');
+                            for (let button of buttons) {{
+                                if (button.innerText.includes('Submit Response') || 
+                                    button.innerText.includes('📤 Submit Response')) {{
+                                    button.click();
+                                    break;
+                                }}
+                            }}
+                        }}, 500);
+                    }}
+                    
+                    // Show termination alert
+                    alert('❌ INTERVIEW TERMINATED: Multiple tab switches detected.');
+                }}
+            }}
+        }});
+        </script>
+        """
+        
+        st.components.v1.html(js_code, height=0, width=0)
+    
+    # Check for termination
+    if st.session_state.tab_switch_count >= 2 and st.session_state.interview_active:
+        # Set flag to prevent multiple triggers
+        st.session_state.auto_submit_triggered = True
+        
+        # Auto-fill the response field with termination message
+        if st.session_state.current_response == "":
+            st.session_state.current_response = "session terminated due to tab switching"
+            
+            # Trigger auto-submit by setting a flag
+            st.session_state.trigger_auto_submit = True
+        
+        st.rerun()
+    
+    # Check for auto-submit trigger
+    if st.session_state.get('trigger_auto_submit', False) and st.session_state.interview_active:
+        # Clear the trigger
+        st.session_state.trigger_auto_submit = False
+        
+        # Simulate submission
+        if st.session_state.current_response:
+            process_response(st.session_state.current_response)
+    
+    # Show warning after first tab switch
+    if st.session_state.tab_switch_count == 1 and not st.session_state.tab_warning_given:
+        st.warning("⚠️ Warning: Tab switching is prohibited. One more switch will terminate the interview.")
+        st.session_state.tab_warning_given = True
+    
+    # ... rest of your existing code ...
+    
     # Header
     st.markdown("""
     <div class='main-header'>
@@ -839,9 +1285,11 @@ def main():
     </div>
     """, unsafe_allow_html=True)
     
+    # ... rest of your code (sidebar and routing) ...
+    
     # Sidebar
     with st.sidebar:
-        st.markdown("### 📊 Interview Dashboard")
+        st.markdown("###Interview Dashboard")
         st.markdown("---")
         
         if st.session_state.interview_active:
@@ -857,33 +1305,13 @@ def main():
             st.markdown("---")
             st.markdown("**Quick Actions**")
             
-            if st.button("⏸️ Pause Interview", use_container_width=True, key="pause_interview_btn"):
-                st.session_state.interview_active = False
-                st.rerun()
-            
-            if st.button("⏹️ End Interview", type="secondary", use_container_width=True, key="end_interview_sidebar"):
+            if st.button("End Interview", type="secondary", use_container_width=True, key="end_interview_sidebar"):
                 st.session_state.interview_completed = True
                 st.session_state.interview_active = False
                 st.rerun()
+
             
-            # Current stats
-            st.markdown("---")
-            st.markdown("**Current Status**")
-            
-            if st.session_state.get("introduction_analyzed", False):
-                profile = st.session_state.get("candidate_profile", {})
-                st.metric("Experience", profile.get("experience_level", "Not set"))
-                st.metric("Primary Skill", profile.get("primary_skill", "Not set"))
-                
-                if st.session_state.questions:
-                    st.markdown("**Question Type**")
-                    current_idx = st.session_state.current_question_index
-                    if current_idx > 0 and current_idx <= len(st.session_state.questions):
-                        question = st.session_state.questions[current_idx - 1]
-                        if any(word in question.lower() for word in ["team", "project", "challenge", "disagreement"]):
-                            st.markdown("Behavioral")
-                        else:
-                            st.markdown("Technical")
+
         
         elif st.session_state.interview_completed:
             st.markdown("### ✅ Interview Complete")

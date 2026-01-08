@@ -10,8 +10,341 @@ import numpy as np
 
 st.set_page_config(
     page_title="HR Interview Dashboard",
-    layout="wide"
+    layout="wide",
+    page_icon="📊"
 )
+
+# Light Theme CSS
+css = """
+<style>
+    /* ===== LIGHT THEME BASE ===== */
+    .stApp {
+        background-color: #f8fafc;
+        color: #334155;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    
+    /* ===== HEADERS ===== */
+    h1, h2, h3, h4, h5, h6 {
+        color: #1e293b;
+        font-weight: 600;
+        margin-bottom: 1rem;
+    }
+    
+    h1 {
+        color: #1e40af;
+        border-bottom: 2px solid #e2e8f0;
+        padding-bottom: 0.5rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    /* ===== CARDS AND CONTAINERS ===== */
+    .stCard {
+        background: white;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+    
+/* ===== ENHANCED METRICS & CARD STYLING ===== */
+.stMetric {
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 1.25rem;
+    margin-bottom: 0.75rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.stMetric:hover {
+    border-color: #c7d2fe;
+    box-shadow: 0 8px 16px -2px rgba(0, 0, 0, 0.08);
+    transform: translateY(-2px);
+}
+
+.stMetric::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: linear-gradient(180deg, #4f46e5 0%, #7c3aed 100%);
+    border-radius: 12px 0 0 12px;
+}
+
+/* Different colored stripes for different metrics */
+.stMetric:nth-child(4n+1)::before {
+    background: linear-gradient(180deg, #10b981 0%, #34d399 100%);
+}
+
+.stMetric:nth-child(4n+2)::before {
+    background: linear-gradient(180deg, #3b82f6 0%, #60a5fa 100%);
+}
+
+.stMetric:nth-child(4n+3)::before {
+    background: linear-gradient(180deg, #f59e0b 0%, #fbbf24 100%);
+}
+
+.stMetric:nth-child(4n+4)::before {
+    background: linear-gradient(180deg, #8b5cf6 0%, #a78bfa 100%);
+}
+
+.stMetric > div[data-testid="stMetricLabel"] {
+    color: #475569 !important;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.75rem;
+}
+
+.stMetric > div[data-testid="stMetricValue"] {
+    color: #1e293b !important;
+    font-size: 2.2rem;
+    font-weight: 700;
+    line-height: 1.2;
+    margin: 0.25rem 0;
+    text-shadow: none;
+}
+
+.stMetric > div[data-testid="stMetricDelta"] {
+    color: #10b981;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+/* ===== STATUS CARDS (Similar to metrics) ===== */
+.custom-card {
+    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin: 0.75rem 0;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    transition: all 0.3s ease;
+}
+
+.custom-card:hover {
+    border-color: #c7d2fe;
+    box-shadow: 0 8px 16px -2px rgba(0, 0, 0, 0.08);
+}
+
+.custom-card h3 {
+    color: #1e293b !important;
+    margin: 0 0 0.5rem 0 !important;
+    font-size: 1.8rem !important;
+    font-weight: 700 !important;
+}
+
+.custom-card p {
+    color: #475569 !important;
+    margin: 0 !important;
+    font-size: 0.9rem !important;
+    font-weight: 500 !important;
+}
+
+/* ===== ALL TEXT ELEMENTS ENHANCED CONTRAST ===== */
+.stApp [class*="css"] {
+    color: #334155 !important;
+}
+
+/* Ensure all text in containers has good contrast */
+div[data-testid="column"] * {
+    color: #334155 !important;
+}
+
+/* Fix for any white text on white background */
+.stMetric * {
+    color: #1e293b !important;
+}
+
+/* ===== SPECIFIC FIX FOR METRIC TEXT VISIBILITY ===== */
+[data-testid="stMetricValue"] {
+    color: #0f172a !important;
+    font-weight: 800 !important;
+}
+
+[data-testid="stMetricLabel"] {
+    color: #475569 !important;
+    font-weight: 600 !important;
+}
+    /* ===== BUTTONS ===== */
+    .stButton > button {
+        background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 0.5rem 1rem;
+        font-weight: 500;
+        transition: all 0.3s ease;
+    }
+    
+    .stButton > button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2);
+    }
+    
+    /* ===== SIDEBAR ===== */
+    section[data-testid="stSidebar"] {
+        background-color: #f1f5f9;
+        border-right: 1px solid #e2e8f0;
+    }
+    
+    section[data-testid="stSidebar"] h1, 
+    section[data-testid="stSidebar"] h2, 
+    section[data-testid="stSidebar"] h3 {
+        color: #1e293b;
+    }
+    
+    /* ===== TABS ===== */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 2px;
+        background-color: #f1f5f9;
+        padding: 4px;
+        border-radius: 8px;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        background-color: white;
+        border-radius: 6px;
+        color: #64748b;
+        font-weight: 500;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background-color: #4f46e5;
+        color: white;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+    
+    /* ===== EXPANDER ===== */
+    .streamlit-expanderHeader {
+        background: white;
+        color: #1e293b;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        font-weight: 600;
+    }
+    
+    .streamlit-expanderContent {
+        background: white;
+        border: 1px solid #e2e8f0;
+        border-top: none;
+        border-radius: 0 0 8px 8px;
+    }
+    
+    /* ===== SUCCESS/WARNING/ERROR ===== */
+    .stSuccess {
+        background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.05) 100%);
+        border-left: 4px solid #10b981;
+        border-radius: 8px;
+        padding: 1rem;
+    }
+    
+    .stWarning {
+        background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(217, 119, 6, 0.05) 100%);
+        border-left: 4px solid #f59e0b;
+        border-radius: 8px;
+        padding: 1rem;
+    }
+    
+    .stError {
+        background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(220, 38, 38, 0.05) 100%);
+        border-left: 4px solid #ef4444;
+        border-radius: 8px;
+        padding: 1rem;
+    }
+    
+    .stInfo {
+        background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(37, 99, 235, 0.05) 100%);
+        border-left: 4px solid #3b82f6;
+        border-radius: 8px;
+        padding: 1rem;
+    }
+    
+    /* ===== DATA FRAME ===== */
+    .dataframe {
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+    }
+    
+    /* ===== SELECT BOXES ===== */
+    .stSelectbox, .stMultiselect, .stNumberInput, .stDateInput, .stSlider {
+        background: white;
+        border-radius: 8px;
+    }
+    
+    /* ===== CHECKBOX ===== */
+    .stCheckbox > label {
+        color: #334155;
+    }
+    
+    /* ===== PROGRESS BAR ===== */
+    .stProgress > div > div > div {
+        background: linear-gradient(90deg, #4f46e5 0%, #7c3aed 100%);
+        border-radius: 4px;
+    }
+    
+    .stProgress > div {
+        background: #e2e8f0;
+        border-radius: 4px;
+    }
+    
+   
+    /* ===== STATUS BADGES ===== */
+    .status-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 500;
+        margin: 2px;
+    }
+    
+    .status-selected {
+        background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
+        color: white;
+    }
+    
+    .status-rejected {
+        background: linear-gradient(135deg, #ef4444 0%, #f87171 100%);
+        color: white;
+    }
+    
+    .status-conditional {
+        background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+        color: white;
+    }
+    
+    /* ===== SCROLLBAR ===== */
+    ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+    
+    ::-webkit-scrollbar-track {
+        background: #f1f5f9;
+        border-radius: 4px;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+        background: linear-gradient(135deg, #c7d2fe 0%, #a5b4fc 100%);
+        border-radius: 4px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(135deg, #a5b4fc 0%, #818cf8 100%);
+    }
+</style>
+"""
+
+st.markdown(css, unsafe_allow_html=True)
 
 def load_reports():
     """Load all interview reports from the reports directory"""
@@ -41,6 +374,18 @@ def load_reports():
                     report_data['filename'] = filename
                     report_data['filepath'] = filepath
                     
+                    # Determine status based on score
+                    overall_score = report_data.get('overall_score', 0)
+                    if overall_score >= 7:
+                        report_data['status'] = 'Selected'
+                        report_data['status_color'] = 'success'
+                    elif overall_score >= 6:
+                        report_data['status'] = 'Conditional'
+                        report_data['status_color'] = 'warning'
+                    else:
+                        report_data['status'] = 'Rejected'
+                        report_data['status_color'] = 'error'
+                    
                     # Parse timestamp for display
                     timestamp_str = report_data.get('timestamp', '')
                     if timestamp_str:
@@ -50,8 +395,10 @@ def load_reports():
                             else:
                                 dt = datetime.fromisoformat(timestamp_str)
                             report_data['display_date'] = dt.strftime("%Y-%m-%d %H:%M:%S")
+                            report_data['display_date_short'] = dt.strftime("%b %d, %Y")
                         except:
                             report_data['display_date'] = timestamp_str
+                            report_data['display_date_short'] = timestamp_str
                     
                     reports.append(report_data)
             except Exception as e:
@@ -96,7 +443,7 @@ def create_score_chart(report_data, chart_id="default"):
     
     fig.add_trace(
         go.Pie(labels=labels, values=values, hole=0.3,
-               marker_colors=['#00cc96', '#ffa15a', '#ef553b', '#636efa'],
+               marker_colors=['#10b981', '#3b82f6', '#f59e0b', '#ef4444'],
                name=f"pie_{chart_id}"),
         row=1, col=1
     )
@@ -113,7 +460,7 @@ def create_score_chart(report_data, chart_id="default"):
             category_scores.append(avg)
         
         fig.add_trace(
-            go.Bar(x=categories, y=category_scores, marker_color='#636efa',
+            go.Bar(x=categories, y=category_scores, marker_color='#4f46e5',
                    text=[f'{score:.1f}' for score in category_scores],
                    textposition='auto',
                    name=f"bar_{chart_id}"),
@@ -124,7 +471,8 @@ def create_score_chart(report_data, chart_id="default"):
     question_numbers = list(range(1, len(question_scores) + 1))
     fig.add_trace(
         go.Scatter(x=question_numbers, y=question_scores, mode='lines+markers',
-                   name=f'line_{chart_id}', line=dict(color='#ff7f0e', width=3)),
+                   name=f'line_{chart_id}', line=dict(color='#f59e0b', width=3),
+                   marker=dict(size=8)),
         row=2, col=1
     )
     
@@ -133,7 +481,7 @@ def create_score_chart(report_data, chart_id="default"):
         avg_line = [sum(question_scores)/len(question_scores)] * len(question_numbers)
         fig.add_trace(
             go.Scatter(x=question_numbers, y=avg_line, mode='lines',
-                       name=f'avg_{chart_id}', line=dict(color='#2ca02c', width=2, dash='dash')),
+                       name=f'avg_{chart_id}', line=dict(color='#10b981', width=2, dash='dash')),
             row=2, col=1
         )
     
@@ -141,36 +489,38 @@ def create_score_chart(report_data, chart_id="default"):
     if question_scores:
         fig.add_trace(
             go.Box(y=question_scores, name=f'box_{chart_id}', 
-                   marker_color='#2ca02c', boxmean=True),
+                   marker_color='#3b82f6', boxmean=True),
             row=2, col=2
         )
     
     fig.update_layout(
-        height=800, 
-        showlegend=False, 
-        title_text=f"Candidate Performance Analysis - {chart_id}",
-        title_x=0.5
+        height=600,
+        showlegend=False,
+        paper_bgcolor='white',
+        plot_bgcolor='white',
+        font=dict(color='#334155')
     )
+    
+    # Update subplot titles
+    fig.update_annotations(font_size=14, font_color='#1e293b')
+    
     return fig
 
 def generate_readable_report_locally(report_data: dict) -> str:
-    """Generate a human-readable text report locally (without importing from app.py)"""
+    """Generate a human-readable text report locally"""
     report = "=" * 60 + "\n"
     report += "VIRTUAL HR INTERVIEWER - CANDIDATE REPORT\n"
     report += "=" * 60 + "\n\n"
     
-    # Basic info with safe access
+    # Basic info
     report += f"Report Generated: {report_data.get('timestamp', 'N/A')}\n"
-    
-    # Use get() with default values
     total_questions = report_data.get('total_questions_answered', 
                                     len(report_data.get('question_evaluations', [])))
     report += f"Total Questions Answered: {total_questions}\n"
-    
     report += f"Overall Score: {report_data.get('overall_score', 0):.2f}/10\n"
     report += f"Final Score: {report_data.get('final_score', 0):.2f}/10\n\n"
     
-    # Candidate Profile with safe access
+    # Candidate Profile
     profile = report_data.get('candidate_profile', {})
     report += "CANDIDATE PROFILE\n"
     report += "-" * 40 + "\n"
@@ -197,7 +547,6 @@ def generate_readable_report_locally(report_data: dict) -> str:
         report += f"\nQuestion {i+1}: {eval_data.get('question', 'N/A')}\n"
         report += f"Score: {score}/10\n"
         
-        # Category scores with safe access
         categories = [
             ("Technical Accuracy", "technical_accuracy"),
             ("Completeness", "completeness"),
@@ -259,8 +608,8 @@ def generate_readable_report_locally(report_data: dict) -> str:
     return report
 
 def main():
-    st.title("HR Interview Dashboard")
-    st.markdown("Analyze candidate interview results")
+    st.title("📊 HR Interview Dashboard")
+    st.markdown("Analyze candidate interview results and performance metrics")
     
     # Load reports
     reports = load_reports()
@@ -271,32 +620,51 @@ def main():
     
     # Sidebar filters
     with st.sidebar:
-        st.header("Filters")
+        st.markdown("## 🔍 Filters")
+        st.markdown("---")
+        
+        # Status filter (NEW FEATURE)
+        st.markdown("### Status Filter")
+        status_options = ['All', 'Selected', 'Conditional', 'Rejected']
+        selected_status = st.selectbox(
+            "Select candidate status to view:",
+            status_options,
+            index=0
+        )
         
         # Experience filter
+        st.markdown("### Experience Level")
         experience_levels = list(set([r['candidate_profile'].get('experience_level', 'N/A') 
                                     for r in reports]))
+        experience_levels.sort()
         selected_experience = st.multiselect(
-            "Experience Level", 
+            "Filter by experience:", 
             experience_levels, 
             default=experience_levels
         )
         
-        # Score range filter - FIXED VERSION
-        scores = [r.get('overall_score', 0) for r in reports]
- 
-        # Always use 0-10 range for consistency
+        # Score range filter
+        st.markdown("### Score Range")
         score_range = st.slider(
-            "Overall Score Range",
-            0.0,  # Min value
-            10.0, # Max value
-            (6.5, 10.0),  # CHANGED: Set default to >= 6.5
-            0.1   # Step
+            "Overall Score Range:",
+            0.0, 10.0,
+            (0.0, 10.0),
+            0.1
         )
-
-        show_rejected = st.checkbox("Include rejected candidates", value=False)
         
-        # Date filter with better error handling
+        # Skill filter
+        st.markdown("### Primary Skill")
+        all_skills = list(set([r['candidate_profile'].get('primary_skill', 'N/A') 
+                              for r in reports]))
+        all_skills.sort()
+        selected_skills = st.multiselect(
+            "Filter by primary skill:",
+            all_skills,
+            default=all_skills
+        )
+        
+        # Date filter
+        st.markdown("### Date Range")
         valid_dates = []
         for r in reports:
             try:
@@ -309,17 +677,14 @@ def main():
                 else:
                     dt = datetime.fromisoformat(ts)
                 valid_dates.append(dt)
-            except Exception as e:
-                # Skip reports with invalid timestamps
+            except Exception:
                 continue
         
         if valid_dates:
             min_date = min(valid_dates).date()
             max_date = max(valid_dates).date()
             
-            # Check if dates are the same
             if min_date == max_date:
-                # If only one date, show a date picker instead of range
                 selected_date = st.date_input(
                     "Select Date",
                     value=min_date,
@@ -329,28 +694,39 @@ def main():
                 date_range = [selected_date, selected_date]
             else:
                 date_range = st.date_input(
-                    "Date Range",
+                    "Select Date Range",
                     value=[min_date, max_date],
                     min_value=min_date,
                     max_value=max_date
                 )
         else:
             date_range = None
+        
+        st.markdown("---")
+        st.markdown(f"**Total Reports:** {len(reports)}")
     
-    # Filter reports
+    # Filter reports based on all criteria
     filtered_reports = []
     for report in reports:
+        # Status filter
+        if selected_status != 'All':
+            if report.get('status', '') != selected_status:
+                continue
+        
         # Experience filter
         exp_level = report['candidate_profile'].get('experience_level', 'N/A')
+        if exp_level not in selected_experience:
+            continue
         
         # Score filter
         overall_score = report.get('overall_score', 0)
+        if not (score_range[0] <= overall_score <= score_range[1]):
+            continue
         
-        # NEW LOGIC: Apply show_rejected setting
-        if not show_rejected:
-            # When checkbox is unchecked, enforce minimum 6.5 threshold
-            if overall_score < 6.5:
-                continue  # Skip this report
+        # Skill filter
+        skill = report['candidate_profile'].get('primary_skill', 'N/A')
+        if skill not in selected_skills:
+            continue
         
         # Date filter
         date_match = True
@@ -369,50 +745,84 @@ def main():
             except:
                 date_match = True
         
-        # Apply all filters
-        if (exp_level in selected_experience and
-            score_range[0] <= overall_score <= score_range[1] and
-            date_match):
+        if date_match:
             filtered_reports.append(report)
     
-    # Display summary
-    st.subheader(f"📈 Interview Reports Summary")
+    # Display summary metrics
+    st.markdown("## 📈 Dashboard Overview")
+    
+    # Calculate status counts
+    status_counts = {
+        'Selected': len([r for r in filtered_reports if r.get('status') == 'Selected']),
+        'Conditional': len([r for r in filtered_reports if r.get('status') == 'Conditional']),
+        'Rejected': len([r for r in filtered_reports if r.get('status') == 'Rejected'])
+    }
     
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.metric("Total Reports", len(reports))
     with col2:
-        st.metric("Filtered Reports", len(filtered_reports))
+        st.metric("Filtered Reports", status_counts['Selected'])
     with col3:
-        if reports:
-            avg_all = sum([r.get('overall_score', 0) for r in reports]) / len(reports)
-            st.metric("Avg Score (All)", f"{avg_all:.2f}/10")
+        if filtered_reports:
+            avg_score = sum([r.get('overall_score', 0) for r in filtered_reports]) / len(filtered_reports)
+            st.metric("Average Score", f"{avg_score:.2f}/10")
     with col4:
         if filtered_reports:
-            avg_filtered = sum([r.get('overall_score', 0) for r in filtered_reports]) / len(filtered_reports)
-            st.metric("Avg Score (Filtered)", f"{avg_filtered:.2f}/10")
+            avg_questions = sum([len(r.get('question_evaluations', [])) for r in filtered_reports]) / len(filtered_reports)
+            st.metric("Avg Questions", f"{avg_questions:.1f}")
+    
+    # Status distribution
+    st.markdown("### 📊 Status Distribution")
+    status_cols = st.columns(3)
+    with status_cols[0]:
+        st.markdown(f"""
+        <div class='custom-card' style='border-left: 4px solid #10b981;'>
+            <h3 style='color: #10b981; margin: 0;'>{status_counts['Selected']}</h3>
+            <p style='color: #64748b; margin: 0;'>Selected</p>
+        </div>
+        """, unsafe_allow_html=True)
+    with status_cols[1]:
+        st.markdown(f"""
+        <div class='custom-card' style='border-left: 4px solid #f59e0b;'>
+            <h3 style='color: #f59e0b; margin: 0;'>{status_counts['Conditional']}</h3>
+            <p style='color: #64748b; margin: 0;'>Conditional</p>
+        </div>
+        """, unsafe_allow_html=True)
+    with status_cols[2]:
+        st.markdown(f"""
+        <div class='custom-card' style='border-left: 4px solid #ef4444;'>
+            <h3 style='color: #ef4444; margin: 0;'>{status_counts['Rejected']}</h3>
+            <p style='color: #64748b; margin: 0;'>Rejected</p>
+        </div>
+        """, unsafe_allow_html=True)
     
     # Display filtered reports
-    st.subheader(f"Detailed Reports ({len(filtered_reports)} found)")
+    st.markdown("---")
+    st.markdown(f"## 📋 Detailed Reports ({len(filtered_reports)} found)")
     
     if not filtered_reports:
         st.info("No reports match the selected filters.")
         return
     
     # Create tabs for different views
-    tab1, tab2 = st.tabs(["📊 Detailed View", "📈 Summary View"])
+    tab1, tab2 = st.tabs(["🔍 Detailed View", "📊 Summary Analytics"])
     
     with tab1:
         # Display each report in an expander
         for i, report in enumerate(filtered_reports):
+            status = report.get('status', 'Unknown')
+            status_color = report.get('status_color', 'default')
+            
             with st.expander(
-                f"Report {i+1}: {report.get('display_date', report.get('timestamp', 'N/A'))} | "
+                f"{report.get('display_date_short', 'N/A')} | "
                 f"Score: {report.get('overall_score', 0):.1f}/10 | "
+                f"Status: {status} | "
                 f"Exp: {report['candidate_profile'].get('experience_level', 'N/A')}",
                 expanded=False
             ):
                 
-                # Basic info in columns
+                # Basic info in columns with status badge
                 col1, col2, col3, col4 = st.columns(4)
                 with col1:
                     profile = report['candidate_profile']
@@ -428,25 +838,44 @@ def main():
                     st.metric("Overall Score", f"{report.get('overall_score', 0):.2f}/10")
                     st.metric("Final Score", f"{report.get('final_score', 0):.2f}/10")
                 
+                # Status badge
+                status_colors = {
+                    'Selected': '#10b981',
+                    'Conditional': '#f59e0b',
+                    'Rejected': '#ef4444'
+                }
+                status_color = status_colors.get(status, '#64748b')
+                st.markdown(f"""
+                <div style='background: {status_color}15; border: 1px solid {status_color}; 
+                          border-radius: 8px; padding: 0.5rem 1rem; margin: 1rem 0;'>
+                    <strong style='color: {status_color};'>Status:</strong> {status}
+                </div>
+                """, unsafe_allow_html=True)
+                
                 # Skills
                 skills = profile.get("skills", [])
                 if skills:
-                    st.write(f"**Skills:** {', '.join(skills)}")
+                    st.write("**Skills:**")
+                    skill_chips = " ".join([f"<span style='background: #e2e8f0; padding: 4px 12px; border-radius: 16px; margin: 2px; display: inline-block;'>{skill}</span>" 
+                                           for skill in skills])
+                    st.markdown(skill_chips, unsafe_allow_html=True)
                 
                 # Charts
-                st.subheader("Performance Visualization")
+                st.markdown("---")
+                st.subheader("📈 Performance Visualization")
                 fig = create_score_chart(report, chart_id=f"report_{i+1}")
-
+                
                 if fig:
                     st.plotly_chart(fig, use_container_width=True, key=f"chart_main_{i}")
                 else:
                     st.info("No question data available for visualization.")
                 
                 # Detailed question analysis
-                st.subheader("Question Analysis")
+                st.markdown("---")
+                st.subheader("📝 Question Analysis")
                 evaluations = report.get('question_evaluations', [])
                 for j, eval_data in enumerate(evaluations):
-                    with st.expander(f"Q{j+1}: {eval_data['question'][:50]}...", expanded=False):
+                    with st.expander(f"Question {j+1}: {eval_data['question'][:50]}...", expanded=False):
                         evaluation = eval_data['evaluation']
                         
                         col_a, col_b = st.columns([2, 1])
@@ -489,6 +918,7 @@ def main():
                 
                 # Download buttons
                 st.markdown("---")
+                st.write("**Download Reports:**")
                 col_d1, col_d2 = st.columns(2)
                 with col_d1:
                     # JSON download
@@ -502,48 +932,34 @@ def main():
                     )
                 
                 with col_d2:
-                    # Check if text report exists
+                    # Generate text report on the fly
+                    text_report = generate_readable_report_locally(report)
                     txt_filename = report['filename'].replace('.json', '.txt')
-                    txt_path = os.path.join("interview_reports", txt_filename)
-                    if os.path.exists(txt_path):
-                        with open(txt_path, 'r', encoding='utf-8') as f:
-                            text_content = f.read()
-                        st.download_button(
-                            label="📥 Download Text Report",
-                            data=text_content,
-                            file_name=txt_filename,
-                            mime="text/plain",
-                            key=f"text_{i}"
-                        )
-                    else:
-                        # Generate text report on the fly
-                        text_report = generate_readable_report_locally(report)
-                        st.download_button(
-                            label="📥 Generate & Download Text Report",
-                            data=text_report,
-                            file_name=txt_filename,
-                            mime="text/plain",
-                            key=f"text_gen_{i}"
-                        )
+                    st.download_button(
+                        label="📥 Generate Text Report",
+                        data=text_report,
+                        file_name=txt_filename,
+                        mime="text/plain",
+                        key=f"text_{i}"
+                    )
     
     with tab2:
         # Summary statistics across all filtered reports
-        st.subheader("Summary Statistics")
+        st.subheader("📊 Summary Analytics")
         
         if filtered_reports:
             # Create summary DataFrame
             summary_data = []
-            # In the summary_data creation loop, ADD a 'Status' column:
             for report in filtered_reports:
                 profile = report['candidate_profile']
                 overall_score = report.get('overall_score', 0)
                 
                 summary_data.append({
-                    'Date': report.get('display_date', 'N/A'),
+                    'Date': report.get('display_date_short', 'N/A'),
+                    'Status': report.get('status', 'Unknown'),
                     'Experience': profile.get('experience_level', 'N/A'),
                     'Primary Skill': profile.get('primary_skill', 'N/A'),
                     'Overall Score': report.get('overall_score', 0),
-                    'Status': 'Selected' if overall_score >= 6.5 else 'Rejected',  # NEW COLUMN
                     'Intro Score': profile.get('intro_score', 0),
                     'Questions': len(report.get('question_evaluations', [])),
                     'Confidence': profile.get('confidence', 'N/A'),
@@ -552,56 +968,87 @@ def main():
             
             df = pd.DataFrame(summary_data)
             
-            # Display DataFrame
-            st.dataframe(df, use_container_width=True)
+            # Display DataFrame with styling
+            st.dataframe(
+                df.style.applymap(
+                    lambda x: 'color: #10b981' if x == 'Selected' else 
+                             ('color: #f59e0b' if x == 'Conditional' else 
+                             ('color: #ef4444' if x == 'Rejected' else 'color: #64748b')),
+                    subset=['Status']
+                ),
+                use_container_width=True
+            )
             
-            # Statistics
-            st.subheader("Key Statistics")
+            # Statistics in columns
+            st.subheader("📈 Key Statistics")
             
-            col1, col2, col3, col4 = st.columns(4)
+            col1, col2, col3 = st.columns(3)
             with col1:
-                # Score distribution
+                # Score statistics
                 scores = df['Overall Score'].tolist()
                 if scores:
+                    st.markdown("**Score Analysis**")
                     st.metric("Average Score", f"{np.mean(scores):.2f}/10")
                     st.metric("Median Score", f"{np.median(scores):.2f}/10")
+                    st.metric("Score Range", f"{max(scores) - min(scores):.2f}")
             
             with col2:
-                # Experience distribution
-                exp_counts = df['Experience'].value_counts()
-                st.write("**Experience Distribution:**")
-                for exp, count in exp_counts.items():
-                    st.write(f"{exp}: {count}")
+                # Status distribution
+                st.markdown("**Status Distribution**")
+                status_counts = df['Status'].value_counts()
+                for status, count in status_counts.items():
+                    color = "#10b981" if status == "Selected" else "#f59e0b" if status == "Conditional" else "#ef4444"
+                    st.markdown(f"<div style='color: {color}; font-weight: 500;'>{status}: {count}</div>", 
+                               unsafe_allow_html=True)
             
             with col3:
-                # Skill distribution
-                skill_counts = df['Primary Skill'].value_counts()
-                st.write("**Primary Skill Distribution:**")
-                for skill, count in skill_counts.items():
-                    st.write(f"{skill}: {count}")
-
-            with col4:  # Or create a new column
-                # Status distribution
-                status_counts = df['Status'].value_counts()
-                st.write("**Selection Status:**")
-                for status, count in status_counts.items():
-                    color = "green" if "Selected" in status else "red" # type: ignore
-                    st.markdown(f"<span style='color:{color}; font-weight:bold'>{status}: {count}</span>", unsafe_allow_html=True)
+                # Experience distribution
+                st.markdown("**Experience Distribution**")
+                exp_counts = df['Experience'].value_counts()
+                for exp, count in exp_counts.items():
+                    st.write(f"**{exp}:** {count}")
             
             # Score distribution chart
-            st.subheader("Score Distribution Chart")
+            st.subheader("📊 Score Distribution")
             if scores:
-                fig = go.Figure(data=[go.Histogram(x=scores, nbinsx=20, name=f"histogram_summary")])
+                fig = go.Figure(data=[go.Histogram(
+                    x=scores, 
+                    nbinsx=20, 
+                    marker_color='#4f46e5',
+                    opacity=0.7
+                )])
                 fig.update_layout(
                     title="Overall Score Distribution",
                     xaxis_title="Score",
-                    yaxis_title="Count",
-                    showlegend=False
+                    yaxis_title="Number of Candidates",
+                    paper_bgcolor='white',
+                    plot_bgcolor='white',
+                    font=dict(color='#334155'),
+                    height=400
                 )
                 st.plotly_chart(fig, use_container_width=True, key="histogram_chart")
-            else:
-                st.info("No score data available for chart.")
+            
+            # Status vs Experience heatmap
+            st.subheader("🔥 Status by Experience Level")
+            if not df.empty and 'Experience' in df.columns and 'Status' in df.columns:
+                pivot_table = pd.crosstab(df['Experience'], df['Status'])
+                if not pivot_table.empty:
+                    fig = go.Figure(data=go.Heatmap(
+                        z=pivot_table.values,
+                        x=pivot_table.columns,
+                        y=pivot_table.index,
+                        colorscale='Viridis',
+                        text=pivot_table.values,
+                        texttemplate="%{text}",
+                        textfont={"size": 14}
+                    ))
+                    fig.update_layout(
+                        title="Candidate Status by Experience Level",
+                        xaxis_title="Status",
+                        yaxis_title="Experience Level",
+                        height=300
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
 
 if __name__ == "__main__":
     main()
-

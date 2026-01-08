@@ -23,4 +23,4 @@ SKILL_CATEGORIES = {
 
 # Termination keywords
 TERMINATION_KEYWORDS = ["quit", "exit", "stop", "end", "terminate", "abort"]
-ABUSIVE_KEYWORDS = ["stupid", "idiot", "dumb", "worthless", "hate", "useless", "terrible"]
+ABUSIVE_KEYWORDS = ["tab switching", "stupid", "idiot", "dumb", "worthless", "hate", "useless", "terrible"]

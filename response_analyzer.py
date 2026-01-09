@@ -426,8 +426,8 @@ class ResponseAnalyzer:
             primary_skill = "backend"
         
         # Enhanced experience inference
-        senior_keywords = ["led", "managed", "architected", "designed", "mentored", "10+", "8+", "senior", "principal", "lead"]
-        junior_keywords = ["recent graduate", "bootcamp", "entry level", "seeking first", "0-2 years", "1-3 years", "junior"]
+        senior_keywords = ["led", "managed", "architected", "designed", "mentored", "10+", "6+", "7+", "8+", "9+", "senior", "principal", "lead"]
+        junior_keywords = ["recent graduate", "bootcamp", "entry level", "seeking first","0-2 years", "1-3 years", "3 years", "months", "1 years", "2 years", "junior"]
         
         senior_count = sum(1 for keyword in senior_keywords if keyword in response.lower())
         junior_count = sum(1 for keyword in junior_keywords if keyword in response.lower())

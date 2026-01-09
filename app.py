@@ -7,7 +7,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from response_analyzer import ResponseAnalyzer
 from report_manager import ReportManager
-from question_generator import QuestionGenerator  # ADDED: Import QuestionGenerator
+from question_generator import QuestionGenerator
 import json
 
 # Initialize report manager
@@ -16,7 +16,7 @@ report_manager = ReportManager()
 # Initialize the analyzer
 analyzer = ResponseAnalyzer()
 
-# ADDED: Initialize QuestionGenerator
+# Initialize QuestionGenerator
 question_generator = QuestionGenerator()
 
 # Page configuration
@@ -30,10 +30,6 @@ st.set_page_config(
 # Professional Dark Theme CSS
 css = """
 <style>
-
-
-
-   
     /* ===== BASE THEME ===== */
     .stApp {
         background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
@@ -87,11 +83,13 @@ css = """
         margin: 0 auto;
         line-height: 1.6;
     }
+    
     .header {
         text-align:center;
         padding: 1.5rem 1rem;
         margin: 0.5rem 0 1.5rem;
     }
+    
     /* ===== CARD STYLING ===== */
     .stCard {
         background: rgba(30, 41, 59, 0.7);
@@ -459,7 +457,6 @@ css = """
             padding: 1.5rem 1rem;
             margin: 0.5rem 0 1.5rem;
         }
-
         
         .main-header h1 {
             font-size: 2rem;
@@ -537,7 +534,7 @@ def init_session_state():
         'interview_completed': False,
         'interview_terminated': False,
         'current_question_index': 0,
-        'questions': [],  # CHANGED: Start with empty list, will be generated dynamically
+        'questions': [],
         'messages': [],
         'candidate_profile': {},
         'question_evaluations': [],
@@ -548,8 +545,12 @@ def init_session_state():
         'termination_reason': '',
         'termination_log': [],
         'current_response': '',
-        'total_questions_to_ask': 15,  # ADDED: Configurable number of questions
-        'questions_generated': False,  # ADDED: Track if questions have been generated
+        'total_questions_to_ask': 15,
+        'questions_generated': False,
+        # TAB SWITCHING DETECTION VARIABLES
+        'tab_switch_count': 0,
+        'tab_warning_given': False,
+        'auto_terminate_tab_switch': False,
     }
     
     for key, value in defaults.items():
@@ -626,14 +627,11 @@ def get_next_question():
 def process_response(response_text):
     """Process the candidate's response and update interview state"""
     
-    # Clear the input after processing - FIXED: This is already done at the beginning
-    # st.session_state.current_response = ""  # Removed duplicate clearing
-    
     if not response_text or response_text.strip() == "":
         st.warning("Please enter a response before submitting.")
         return
     
-        # Special handling for tab switching termination
+    # Special handling for tab switching termination
     if "session terminated due to tab switching" in response_text.lower():
         st.session_state.interview_terminated = True
         st.session_state.termination_reason = "misconduct"
@@ -810,7 +808,7 @@ def process_response(response_text):
             "timestamp": datetime.now().strftime("%H:%M:%S")
         })
     
-    # Clear the current response for next question - ADDED: This clears the input field
+    # Clear the current response for next question
     st.session_state.current_response = ""
     
     # Force rerun to update UI
@@ -818,30 +816,6 @@ def process_response(response_text):
 
 def show_interview_in_progress():
     """Display interview interface when interview is active"""
-    
-    # Check if we need to auto-submit due to tab switching
-    if st.session_state.get('tab_switch_count', 0) >= 2 and not st.session_state.get('auto_submit_triggered', False):
-        st.session_state.auto_submit_triggered = True
-        st.session_state.current_response = "session terminated due to tab switching"
-        
-        # Use a callback to auto-submit
-        if st.button("Auto Submit Trigger", key="auto_submit_trigger", help="hidden", type="primary", visible=False):
-            process_response(st.session_state.current_response)
-        
-        # Trigger the button click via JavaScript
-        st.markdown("""
-        <script>
-        setTimeout(() => {
-            const buttons = document.querySelectorAll('button');
-            for (let button of buttons) {
-                if (button.innerText.includes('Auto Submit Trigger')) {
-                    button.click();
-                    break;
-                }
-            }
-        }, 100);
-        </script>
-        """, unsafe_allow_html=True)
     
     st.markdown("""
     <div class='main-header'>
@@ -862,11 +836,11 @@ def show_interview_in_progress():
     
     st.info(f"**Current Question:** {current_prompt}")
     
-    # Response input - FIXED: Use a unique key and bind to session state
+    # Response input
     response = st.text_area(
         "Your Response:",
         value=st.session_state.get("current_response", ""),
-        key=f"response_input_{st.session_state.current_question_index}",  # Unique key for each question
+        key=f"response_input_{st.session_state.current_question_index}",
         height=180,
         placeholder="Type your detailed response here...",
         help="Provide a comprehensive answer with examples where possible"
@@ -888,8 +862,6 @@ def show_interview_in_progress():
     # Display progress
     st.markdown("---")
     total_questions = st.session_state.total_questions_to_ask
-    progress = min(st.session_state.current_question_index / total_questions, 1.0)
-   # st.progress(progress, text=f"Progress: Question {st.session_state.current_question_index} of {total_questions}")
     
     # Display adaptive questions info if available
     if st.session_state.introduction_analyzed and st.session_state.questions:
@@ -915,8 +887,6 @@ def show_interview_in_progress():
 
 def show_welcome_screen():
     """Display welcome screen"""
-    
-
     
     # Welcome content in a centered layout
     col1, col2, col3 = st.columns([1, 3, 1])
@@ -1064,291 +1034,8 @@ def show_report():
     
     # Simple stats
     st.markdown("### Summary")
-
     st.metric("Questions Answered", len(st.session_state.question_evaluations))
-
     st.markdown("---")
-
-# Add this JavaScript for tab switching detection
-tab_switch_js = """
-<script>
-// Tab switching detection
-let tabSwitchCount = 0;
-let lastTabSwitchTime = Date.now();
-let warningShown = false;
-
-// Track tab visibility changes
-document.addEventListener('visibilitychange', function() {
-    if (document.hidden) {
-        // Tab switched away
-        tabSwitchCount++;
-        lastTabSwitchTime = Date.now();
-        
-        // Show warning after first switch
-        if (tabSwitchCount === 1 && !warningShown) {
-            warningShown = true;
-            // Send warning to Streamlit
-            const data = {tabSwitches: tabSwitchCount, action: 'warning'};
-            window.parent.postMessage(data, '*');
-        }
-        
-        // Terminate after second switch
-        if (tabSwitchCount >= 2) {
-            // Send termination signal to Streamlit
-            const data = {tabSwitches: tabSwitchCount, action: 'terminate', reason: 'misconduct'};
-            window.parent.postMessage(data, '*');
-        }
-    }
-});
-
-// Prevent keyboard shortcuts for opening new tabs/windows
-document.addEventListener('keydown', function(e) {
-    // Ctrl+T (new tab), Ctrl+N (new window), Ctrl+Shift+N (incognito)
-    if ((e.ctrlKey || e.metaKey) && 
-        (e.key === 't' || e.key === 'n' || (e.shiftKey && e.key === 'N'))) {
-        e.preventDefault();
-        tabSwitchCount++;
-        
-        if (tabSwitchCount >= 2) {
-            const data = {tabSwitches: tabSwitchCount, action: 'terminate', reason: 'misconduct'};
-            window.parent.postMessage(data, '*');
-        }
-    }
-});
-
-// Prevent right-click context menu for opening in new tab
-document.addEventListener('contextmenu', function(e) {
-    e.preventDefault();
-    return false;
-});
-</script>
-"""
-
-# Function to handle tab switch detection
-def handle_tab_switch():
-    """Check for tab switch events from JavaScript"""
-    if "tab_switches" not in st.session_state:
-        st.session_state.tab_switches = 0
-        st.session_state.last_tab_warning = False
-    
-    # Create a unique key for the component
-    tab_key = f"tab_tracker_{st.session_state.get('current_question_index', 0)}"
-    
-    # JavaScript component that communicates with the parent
-    st.components.v1.html(f"""
-    <div id="tab-tracker"></div>
-    <script>
-        let tabSwitches = 0;
-        let warningGiven = false;
-        
-        // Listen for visibility changes
-        document.addEventListener('visibilitychange', function() {{
-            if (document.hidden) {{
-                tabSwitches++;
-                
-                // Send data to Streamlit via custom message
-                window.parent.postMessage({{
-                    type: 'TAB_SWITCH',
-                    count: tabSwitches,
-                    timestamp: new Date().toISOString()
-                }}, '*');
-            }}
-        }});
-        
-        // Listen for messages back from Streamlit
-        window.addEventListener('message', function(event) {{
-            if (event.data.type === 'TAB_SWITCH_RESPONSE') {{
-                console.log('Tab switch count:', event.data.count);
-            }}
-        }});
-    </script>
-    """, height=0)    
-
-def main():
-    """Main application function"""
-    # Initialize tab switch tracking
-    if "tab_switch_count" not in st.session_state:
-        st.session_state.tab_switch_count = 0
-    if "tab_warning_given" not in st.session_state:
-        st.session_state.tab_warning_given = False
-    if "auto_submit_triggered" not in st.session_state:
-        st.session_state.auto_submit_triggered = False
-    
-    # Simple JavaScript injection for basic detection
-    if st.session_state.interview_active and not st.session_state.interview_terminated:
-        # Create a button that JavaScript can "click" to report tab switches
-        if st.button("Check Tab Status", key="tab_check_hidden", help="Hidden tab check"):
-            # This will be triggered by JavaScript
-            pass
-        
-        # Inject JavaScript
-        js_code = f"""
-        <script>
-        let tabCount = {st.session_state.tab_switch_count};
-        let warned = {str(st.session_state.tab_warning_given).lower()};
-        let autoSubmitDone = {str(st.session_state.auto_submit_triggered).lower()};
-        
-        document.addEventListener('visibilitychange', function() {{
-            if (document.hidden) {{
-                tabCount++;
-                console.log('Tab switch detected. Count:', tabCount);
-                
-                if (tabCount === 1 && !warned) {{
-                    warned = true;
-                    // Show browser alert
-                    alert('⚠️ WARNING: Tab switching detected. Next switch terminates interview.');
-                    
-                    // Update Streamlit session state
-                    const event = new Event('input', {{ bubbles: true }});
-                    document.dispatchEvent(event);
-                    
-                }} else if (tabCount >= 2 && !autoSubmitDone) {{
-                    // Terminate interview by auto-filling and submitting
-                    autoSubmitDone = true;
-                    
-                    // 1. Find the textarea
-                    const textareas = document.querySelectorAll('textarea');
-                    let interviewTextarea = null;
-                    
-                    for (let textarea of textareas) {{
-                        if (textarea.value === '' || textarea.placeholder.includes('Type your detailed response')) {{
-                            interviewTextarea = textarea;
-                            break;
-                        }}
-                    }}
-                    
-                    if (interviewTextarea) {{
-                        // 2. Set the termination message
-                        interviewTextarea.value = 'session terminated due to tab switching';
-                        
-                        // 3. Trigger input event to update Streamlit
-                        interviewTextarea.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                        
-                        // 4. Find and click the submit button
-                        setTimeout(() => {{
-                            const buttons = document.querySelectorAll('button');
-                            for (let button of buttons) {{
-                                if (button.innerText.includes('Submit Response') || 
-                                    button.innerText.includes('📤 Submit Response')) {{
-                                    button.click();
-                                    break;
-                                }}
-                            }}
-                        }}, 500);
-                    }}
-                    
-                    // Show termination alert
-                    alert('❌ INTERVIEW TERMINATED: Multiple tab switches detected.');
-                }}
-            }}
-        }});
-        </script>
-        """
-        
-        st.components.v1.html(js_code, height=0, width=0)
-    
-    # Check for termination
-    if st.session_state.tab_switch_count >= 2 and st.session_state.interview_active:
-        # Set flag to prevent multiple triggers
-        st.session_state.auto_submit_triggered = True
-        
-        # Auto-fill the response field with termination message
-        if st.session_state.current_response == "":
-            st.session_state.current_response = "session terminated due to tab switching"
-            
-            # Trigger auto-submit by setting a flag
-            st.session_state.trigger_auto_submit = True
-        
-        st.rerun()
-    
-    # Check for auto-submit trigger
-    if st.session_state.get('trigger_auto_submit', False) and st.session_state.interview_active:
-        # Clear the trigger
-        st.session_state.trigger_auto_submit = False
-        
-        # Simulate submission
-        if st.session_state.current_response:
-            process_response(st.session_state.current_response)
-    
-    # Show warning after first tab switch
-    if st.session_state.tab_switch_count == 1 and not st.session_state.tab_warning_given:
-        st.warning("⚠️ Warning: Tab switching is prohibited. One more switch will terminate the interview.")
-        st.session_state.tab_warning_given = True
-    
-    # ... rest of your existing code ...
-    
-    # Header
-    st.markdown("""
-    <div class='main-header'>
-        <h1>Virtual HR</h1>
-        <p>AI-Powered Adaptive Technical & Behavioral Screening Platform</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # ... rest of your code (sidebar and routing) ...
-    
-    # Sidebar
-    with st.sidebar:
-        st.markdown("###Interview Dashboard")
-        st.markdown("---")
-        
-        if st.session_state.interview_active:
-            # Progress
-            total_questions = st.session_state.total_questions_to_ask
-            progress = min(st.session_state.current_question_index / total_questions, 1.0)
-            
-            st.markdown("**Progress**")
-            st.progress(progress)
-            st.caption(f"Question {st.session_state.current_question_index}/{total_questions}")
-            
-            # Quick actions
-            st.markdown("---")
-            st.markdown("**Quick Actions**")
-            
-            if st.button("End Interview", type="secondary", use_container_width=True, key="end_interview_sidebar"):
-                st.session_state.interview_completed = True
-                st.session_state.interview_active = False
-                st.rerun()
-
-            
-
-        
-        elif st.session_state.interview_completed:
-            st.markdown("### ✅ Interview Complete")
-            st.markdown("Your interview has been successfully submitted.")
-            st.markdown("---")
-            if st.session_state.overall_score > 0:
-                st.metric("Overall Score", f"{st.session_state.overall_score:.1f}/10")
-        
-        # About section
-        st.markdown("---")
-        st.markdown("### ℹ️ About This Tool")
-        st.markdown("""
-        <div style='background: #1e1e2e; padding: 1rem; border-radius: 8px;'>
-            <div style='display: flex; align-items: center; gap: 10px; margin-bottom: 0.5rem;'>
-                <span>🤖</span><span>AI-Generated Questions</span>
-            </div>
-            <div style='display: flex; align-items: center; gap: 10px; margin-bottom: 0.5rem;'>
-                <span>🔄</span><span>Adaptive Follow-ups</span>
-            </div>
-            <div style='display: flex; align-items: center; gap: 10px; margin-bottom: 0.5rem;'>
-                <span>📊</span><span>Real-time Analysis</span>
-            </div>
-            <div style='display: flex; align-items: center; gap: 10px;'>
-                <span>📝</span><span>Detailed Reports</span>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # Main content routing
-    if not st.session_state.interview_started:
-        show_welcome_screen()
-    elif st.session_state.interview_terminated:
-        show_termination_screen()
-    elif st.session_state.interview_active:
-        show_interview_in_progress()
-    elif st.session_state.interview_completed:
-        show_report()
 
 def save_interview_report():
     """Save interview report using ReportManager"""
@@ -1379,14 +1066,17 @@ def save_interview_report():
             "display_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "candidate_profile": st.session_state.candidate_profile,
             "question_evaluations": st.session_state.question_evaluations,
-            "questions_asked": st.session_state.questions[:len(st.session_state.question_evaluations)],  # ADDED: Track which questions were asked
+            "questions_asked": st.session_state.questions[:len(st.session_state.question_evaluations)],
             "overall_score": st.session_state.overall_score,
             "final_score": st.session_state.final_score,
             "introduction_analyzed": st.session_state.introduction_analyzed,
             "total_questions_answered": len(st.session_state.question_evaluations),
             "total_questions": st.session_state.total_questions_to_ask,
             "messages": st.session_state.messages[:5] if st.session_state.messages else [],
-            "adaptive_interview": True  # ADDED: Flag indicating adaptive questions were used
+            "adaptive_interview": True,
+            # Add tab switching info if applicable
+            "tab_switch_count": st.session_state.get('tab_switch_count', 0),
+            "terminated_by_tab_switch": st.session_state.get('auto_terminate_tab_switch', False)
         }
         
         # DEBUG: Print what we're saving
@@ -1426,7 +1116,7 @@ def save_interview_report():
     except Exception as e:
         print(f"❌ Error saving report: {e}")
         import traceback
-        traceback.print_exc()  # Print full traceback for debugging
+        traceback.print_exc()
         return None
     
 def generate_readable_report(report_data: dict) -> str:
@@ -1541,6 +1231,222 @@ def generate_readable_report(report_data: dict) -> str:
     report += "=" * 60
     
     return report
+
+def main():
+    """Main application function"""
+    
+    # ===== IMMEDIATE TAB SWITCHING TERMINATION CHECK =====
+    # This MUST be at the VERY BEGINNING
+    if st.session_state.get('auto_terminate_tab_switch', False) and st.session_state.interview_active:
+        st.session_state.interview_terminated = True
+        st.session_state.termination_reason = "misconduct"
+        st.session_state.interview_active = False
+        
+        # Add to termination log
+        if "termination_log" not in st.session_state:
+            st.session_state.termination_log = []
+        st.session_state.termination_log.append({
+            "time": datetime.now().strftime("%H:%M:%S"),
+            "reason": "misconduct",
+            "details": f"Tab switching detected ({st.session_state.get('tab_switch_count', 0)} times)"
+        })
+        
+        st.rerun()
+        return  # Stop execution - termination screen will show
+    
+    # ===== TAB SWITCH DETECTION JAVASCRIPT =====
+    if st.session_state.interview_active and not st.session_state.interview_terminated:
+        
+        js_code = f"""
+        <script>
+        let tabCount = {st.session_state.get('tab_switch_count', 0)};
+        let warned = {str(st.session_state.get('tab_warning_given', False)).lower()};
+        
+        document.addEventListener('visibilitychange', function() {{
+            if (document.hidden) {{
+                tabCount++;
+                console.log('Tab switch #' + tabCount);
+                
+                if (tabCount === 1 && !warned) {{
+                    // First switch - show warning
+                    warned = true;
+                    alert('⚠️ WARNING: Tab switching detected. Next switch will terminate the interview immediately!');
+                    
+                    // Update URL to communicate with Streamlit
+                    const url = new URL(window.location);
+                    url.searchParams.set('tab_warning', 'true');
+                    url.searchParams.set('tab_count', tabCount);
+                    window.history.replaceState({{}}, '', url);
+                    
+                    // Force page reload to update session state
+                    setTimeout(() => window.location.reload(), 500);
+                    
+                }} else if (tabCount >= 2) {{
+                    // SECOND SWITCH - TERMINATE IMMEDIATELY
+                    alert('❌ INTERVIEW TERMINATED: Multiple tab switches detected. This violates interview rules.');
+                    
+                    // Set termination flag in URL
+                    const url = new URL(window.location);
+                    url.searchParams.set('terminate_tab', 'true');
+                    url.searchParams.set('tab_count', tabCount);
+                    window.history.replaceState({{}}, '', url);
+                    
+                    // Auto-fill termination message
+                    setTimeout(() => {{
+                        const textareas = document.querySelectorAll('textarea');
+                        for (let textarea of textareas) {{
+                            if (textarea.placeholder && textarea.placeholder.includes('Type your detailed response')) {{
+                                textarea.value = 'session terminated due to tab switching';
+                                const inputEvent = new Event('input', {{ bubbles: true }});
+                                textarea.dispatchEvent(inputEvent);
+                                
+                                // Auto-click submit button
+                                const buttons = document.querySelectorAll('button');
+                                for (let button of buttons) {{
+                                    if (button.innerText && (
+                                        button.innerText.includes('Submit Response') || 
+                                        button.innerText.includes('📤 Submit Response')
+                                    )) {{
+                                        setTimeout(() => button.click(), 300);
+                                        break;
+                                    }}
+                                }}
+                                break;
+                            }}
+                        }}
+                    }}, 300);
+                    
+                    // Force immediate reload
+                    setTimeout(() => window.location.reload(), 1000);
+                }}
+            }}
+        }});
+        
+        // Prevent keyboard shortcuts
+        document.addEventListener('keydown', function(e) {{
+            if ((e.ctrlKey || e.metaKey) && ['t', 'n', 'T', 'N'].includes(e.key)) {{
+                e.preventDefault();
+                tabCount++;
+                
+                if (tabCount >= 2) {{
+                    alert('❌ INTERVIEW TERMINATED: Attempted to open new tab/window.');
+                    const url = new URL(window.location);
+                    url.searchParams.set('terminate_tab', 'true');
+                    url.searchParams.set('tab_count', tabCount);
+                    window.history.replaceState({{}}, '', url);
+                    setTimeout(() => window.location.reload(), 500);
+                }}
+            }}
+        }});
+        </script>
+        """
+        
+        st.components.v1.html(js_code, height=0)
+    
+    # ===== CHECK URL PARAMETERS =====
+    query_params = st.query_params
+    
+    # Check for tab warning
+    if 'tab_warning' in query_params and query_params['tab_warning'][0] == 'true':
+        st.session_state.tab_warning_given = True
+        if 'tab_count' in query_params:
+            st.session_state.tab_switch_count = int(query_params['tab_count'][0])
+        
+        # Clear URL parameters
+        st.query_params.clear()
+        st.rerun()
+    
+    # Check for termination due to tab switching
+    if 'terminate_tab' in query_params and query_params['terminate_tab'][0] == 'true':
+        st.session_state.auto_terminate_tab_switch = True
+        if 'tab_count' in query_params:
+            st.session_state.tab_switch_count = int(query_params['tab_count'][0])
+        
+        # Clear URL parameters
+        st.query_params.clear()
+        st.rerun()
+    
+    # ===== DIRECT TERMINATION CHECK =====
+    if st.session_state.get('tab_switch_count', 0) >= 2 and st.session_state.interview_active:
+        st.session_state.interview_terminated = True
+        st.session_state.termination_reason = "misconduct"
+        st.session_state.interview_active = False
+        st.session_state.auto_terminate_tab_switch = True
+        
+        st.rerun()
+    
+    # ===== SHOW WARNING IF APPLICABLE =====
+    if st.session_state.tab_switch_count == 1 and not st.session_state.tab_warning_given:
+        st.session_state.tab_warning_given = True
+        st.error("⚠️ **WARNING:** Tab switching detected. Next switch will terminate the interview immediately!")
+    
+    # ===== HEADER =====
+    st.markdown("""
+    <div class='main-header'>
+        <h1>Virtual HR</h1>
+        <p>AI-Powered Adaptive Technical & Behavioral Screening Platform</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # ===== SIDEBAR =====
+    with st.sidebar:
+        st.markdown("### Interview Dashboard")
+        st.markdown("---")
+        
+        if st.session_state.interview_active:
+            # Progress
+            total_questions = st.session_state.total_questions_to_ask
+            progress = min(st.session_state.current_question_index / total_questions, 1.0)
+            
+            st.markdown("**Progress**")
+            st.progress(progress)
+            st.caption(f"Question {st.session_state.current_question_index}/{total_questions}")
+            
+            # Quick actions
+            st.markdown("---")
+            st.markdown("**Quick Actions**")
+            
+            if st.button("End Interview", type="secondary", use_container_width=True, key="end_interview_sidebar"):
+                st.session_state.interview_completed = True
+                st.session_state.interview_active = False
+                st.rerun()
+
+        elif st.session_state.interview_completed:
+            st.markdown("### ✅ Interview Complete")
+            st.markdown("Your interview has been successfully submitted.")
+            st.markdown("---")
+            if st.session_state.overall_score > 0:
+                st.metric("Overall Score", f"{st.session_state.overall_score:.1f}/10")
+        
+        # About section
+        st.markdown("---")
+        st.markdown("### ℹ️ About This Tool")
+        st.markdown("""
+        <div style='background: #1e1e2e; padding: 1rem; border-radius: 8px;'>
+            <div style='display: flex; align-items: center; gap: 10px; margin-bottom: 0.5rem;'>
+                <span>🤖</span><span>AI-Generated Questions</span>
+            </div>
+            <div style='display: flex; align-items: center; gap: 10px; margin-bottom: 0.5rem;'>
+                <span>🔄</span><span>Adaptive Follow-ups</span>
+            </div>
+            <div style='display: flex; align-items: center; gap: 10px; margin-bottom: 0.5rem;'>
+                <span>📊</span><span>Real-time Analysis</span>
+            </div>
+            <div style='display: flex; align-items: center; gap: 10px;'>
+                <span>📝</span><span>Detailed Reports</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # ===== MAIN CONTENT ROUTING =====
+    if not st.session_state.interview_started:
+        show_welcome_screen()
+    elif st.session_state.interview_terminated:
+        show_termination_screen()
+    elif st.session_state.interview_active:
+        show_interview_in_progress()
+    elif st.session_state.interview_completed:
+        show_report()
 
 if __name__ == "__main__":
     main()

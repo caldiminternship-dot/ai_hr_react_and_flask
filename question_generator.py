@@ -11,7 +11,7 @@ class QuestionGenerator:
         self.conversation_history = []
     
     def generate_initial_skill_questions(self, skill_category: str, candidate_level: str = "mid") -> List[str]:
-        """Generate initial questions based on skill category using OpenAI"""
+        """Generate initial questions based on skill category """
         
         prompt = f"""
         Generate 3 technical interview questions for a {candidate_level}-level {skill_category} developer.
@@ -37,7 +37,7 @@ class QuestionGenerator:
                 max_tokens=200
             )
             
-            questions_text = response.choices[0].message.content # pyright: ignore[reportAttributeAccessIssue]
+            questions_text = response.choices[0].message.content # type: ignore
             questions = []
             
             # Parse the response
@@ -108,8 +108,8 @@ class QuestionGenerator:
                 max_tokens=100
             )
             
-            followup_question = response.choices[0].message.content.strip() # pyright: ignore[reportAttributeAccessIssue]
-            
+            followup_question = response.choices[0].message.content.strip() # type: ignore
+
             # Clean up the question
             if followup_question.startswith('"') and followup_question.endswith('"'):
                 followup_question = followup_question[1:-1]
@@ -120,7 +120,7 @@ class QuestionGenerator:
             print(f"Error generating followup: {e}")
             return self._get_generic_followup(skill_category)
     
-    def generate_behavioral_question_ai(self, candidate_background: Dict, context: List[Dict]) -> str:
+    def generate_behavioral_question_ai(self, candidate_background: Dict, context: List[Dict]) -> str:  # type: ignore
         """Generate a behavioral question using AI based on candidate's background"""
         
         skills = candidate_background.get("skills", [])
@@ -153,9 +153,8 @@ class QuestionGenerator:
                 max_tokens=80
             )
             
-            question = response.choices[0].message.content.strip() # type: ignore
-            return question
-            
+            question = response.choices[0].message.content.strip()  # type: ignore
+
         except Exception as e:
             print(f"Error generating behavioral question: {e}")
             return "Tell me about a challenging project you worked on and how you overcame obstacles."

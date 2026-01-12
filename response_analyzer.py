@@ -3,112 +3,29 @@ import re
 from typing import Dict, List, Tuple
 from config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL
 from utils import extract_skills, analyze_response_quality
+from config import SKILL_CATEGORIES
+from skill_detector import SkillDetector 
 
 class ResponseAnalyzer:
     def __init__(self):
         openai.api_key = OPENROUTER_API_KEY
         openai.api_base = OPENROUTER_BASE_URL
 
-    # Add this method to the ResponseAnalyzer class
-
-    def _fallback_analysis(self, response: str) -> Dict:
-        """Fallback analysis when AI analysis fails"""
-        from utils import extract_skills
-        
-        skills = extract_skills(response)
-        
-        # Simple skill categorization
-        skill_counts = {
-            "frontend": 0,
-            "backend": 0,
-            "fullstack": 0,
-            "devops": 0,
-            "data": 0,
-            "mobile": 0
-        }
-        
-        backend_keywords = ["python", "java", "node", "sql", "api", "microservices", "server", "backend", "spring", "django", "flask"]
-        frontend_keywords = ["javascript", "react", "angular", "vue", "html", "css", "frontend", "typescript", "redux", "webpack"]
-        devops_keywords = ["aws", "docker", "kubernetes", "ci/cd", "terraform", "linux", "azure", "gcp", "jenkins", "ansible"]
-        data_keywords = ["machine learning", "data analysis", "pytorch", "tensorflow", "ml", "ai", "data science", "pandas", "numpy", "scikit"]
-        
-        for skill in skills:
-            skill_lower = skill.lower()
-            if any(keyword in skill_lower for keyword in backend_keywords):
-                skill_counts["backend"] += 0
-            if any(keyword in skill_lower for keyword in frontend_keywords):
-                skill_counts["frontend"] += 1
-            if any(keyword in skill_lower for keyword in devops_keywords):
-                skill_counts["devops"] += 1
-            if any(keyword in skill_lower for keyword in data_keywords):
-                skill_counts["data"] += 1
-        
-        # Determine primary skill
-        primary_skill = max(skill_counts, key=skill_counts.get) # type: ignore
-        if skill_counts[primary_skill] == 0:
-            primary_skill = "frontend"  # Default
-        
-        # Estimate experience level based on word count and content
-        word_count = len(response.split())
-        if word_count < 100:
-            experience = "junior"
-            confidence = "low"
-        elif word_count < 250:
-            experience = "mid"
-            confidence = "medium"
-        else:
-            experience = "senior"
-            confidence = "high"
-        
-        # Count projects mentioned (simple heuristic)
-        project_indicators = ["project", "built", "developed", "created", "implemented", "designed"]
-        projects_mentioned = sum(1 for indicator in project_indicators if indicator in response.lower())
-        
-        # Estimate communication quality
-        if word_count < 50:
-            communication = "weak"
-        elif word_count > 500:
-            communication = "weak"  # Too verbose
-        else:
-            communication = "adequate"
-        
-        # Calculate intro score
-        intro_score = 6  # Base
-        if len(skills) >= 3:
-            intro_score += 1
-        if projects_mentioned >= 2:
-            intro_score += 1
-        if word_count >= 150 and word_count <= 400:
-            intro_score += 1
-        if communication == "adequate":
-            intro_score += 1
-        
-        return {
-            "skills": skills,
-            "experience": experience,
-            "primary_skill": primary_skill,
-            "confidence": confidence,
-            "communication": communication,
-            "projects_mentioned": projects_mentioned,
-            "word_count": word_count,
-            "intro_score": min(10, max(1, intro_score))  # Keep between 1-10
-        }
-        
     def analyze_introduction(self, response: str) -> Dict: # type: ignore
         """Analyze candidate's introduction with better AI analysis"""
         prompt = f"""
         Analyze this candidate introduction comprehensively:
-        
+
         Response: {response}
-        
+
         Provide analysis in this exact format:
         Skills: [comma separated list]
-        Experience: [junior/mid/senior]
-        Primary Skill: [backend/frontend/fullstack/devops/data/mobile]
+        Experience Level: [junior/mid/senior]
+        Primary Technical Area: [backend/frontend/fullstack/devops/data/mobile]
         Confidence: [low/medium/high]
         Communication: [weak/adequate/strong]
         Projects Mentioned: [number]
-        
+
         Evaluate based on:
         1. Clarity of career narrative
         2. Technical skills demonstrated
@@ -116,23 +33,35 @@ class ResponseAnalyzer:
         4. Achievements mentioned
         5. Professional communication
         """
-        
+
         try:
             response_analysis = openai.ChatCompletion.create(
                 model="xiaomi/mimo-v2-flash:free",
                 messages=[
-                    {"role": "system", "content": "You are a technical recruiter analyzing candidate responses. Be thorough."},
+                    {
+                        "role": "system",
+                        "content": """
+                            You are a technical recruiter evaluating candidate introductions in a medium-difficulty interview.
+                            - Assume candidates are junior-to-mid level unless explicitly stated otherwise.
+                            - Base all judgments strictly on the response; do not inflate skills, experience, or confidence.
+                            - Focus on technical skills demonstrated, project experience, clarity of communication, and professional tone.
+                            - Provide output EXACTLY in the format specified by the user.
+                            - Be fair and slightly liberal in interpretation, but avoid exaggeration.
+                        """
+                    },
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.3,
-                max_tokens=200
+                max_tokens=250
             )
-            
-            analysis_text = response_analysis.choices[0].message.content # type: ignore
+
+            analysis_text = response_analysis.choices[0].message.content  # type: ignore
             return self._parse_intro_analysis(analysis_text, response)
+
         except Exception as e:
             print(f"AI analysis error: {e}")
-            return self._fallback_analysis(response)
+            return self._enhanced_fallback_analysis(response)
+
 
     def _parse_intro_analysis(self, analysis_text: str, original_response: str) -> Dict:
         """Parse introduction analysis with detailed metrics"""
@@ -232,24 +161,9 @@ class ResponseAnalyzer:
         return result
     
     def _extract_skill_from_text(self, text: str) -> str:
+
         """Extract skill category from text"""
-        text_lower = text.lower()
-        
-        skill_mapping = {
-            "backend": ["backend", "back-end", "server", "api", "database", "python", "java", "node", "spring"],
-            "frontend": ["frontend", "front-end", "react", "angular", "vue", "javascript", "ui", "ux"],
-            "fullstack": ["fullstack", "full-stack", "full stack"],
-            "devops": ["devops", "dev-ops", "aws", "docker", "kubernetes", "ci/cd", "infrastructure"],
-            "data": ["data", "machine learning", "ml", "ai", "analytics", "data science"],
-            "mobile": ["mobile", "ios", "android", "react native", "flutter"]
-        }
-        
-        for skill, keywords in skill_mapping.items():
-            for keyword in keywords:
-                if keyword in text_lower:
-                    return skill
-        
-        return "frontend"  # Default
+        return SkillDetector.detect_primary_skill(text)
 
     def _categorize_experience(self, text: str) -> str:
         """Categorize experience level from text"""
@@ -344,31 +258,56 @@ class ResponseAnalyzer:
         """Infer analysis from response content when AI gives generic results"""
         response_lower = response.lower()
         
-        # Infer primary skill from content
-        skill_indicators = {
-            "backend": ["python", "java", "spring", "django", "flask", "node", "express", "api", "server", "database"],
-            "frontend": ["react", "angular", "vue", "javascript", "typescript", "html", "css", "ui", "frontend"],
-            "devops": ["aws", "docker", "kubernetes", "terraform", "ci/cd", "devops", "infrastructure"],
-            "data": ["machine learning", "data science", "ai", "ml", "tensorflow", "pytorch", "analytics"],
-            "mobile": ["android", "ios", "mobile", "react native", "flutter", "swift", "kotlin"]
-        }
+        # Use SkillDetector
+        primary_skill = SkillDetector.detect_primary_skill(response)
+        skill_keywords = SkillDetector.get_skill_keywords(primary_skill)
         
-        skill_scores = {skill: 0 for skill in skill_indicators.keys()}
-        for skill, indicators in skill_indicators.items():
-            for indicator in indicators:
-                if indicator in response_lower:
-                    skill_scores[skill] += 1
+        # Count keyword occurrences
+        keyword_count = sum(1 for keyword in skill_keywords if keyword in response_lower)
         
-        # Update primary skill if we found strong indicators
-        max_skill = max(skill_scores, key=skill_scores.get) # type: ignore
-        if skill_scores[max_skill] > 2:  # Only update if we have strong evidence
-            current_result["primary_skill"] = max_skill
-        
+        # Only update if we have strong evidence
+        if keyword_count >= 2:
+            current_result["primary_skill"] = primary_skill
+
         # Infer experience from content
         word_count = len(response.split())
-        senior_indicators = ["led", "managed", "architected", "designed", "mentored", "10+", "8+", "senior"]
-        junior_indicators = ["recent graduate", "bootcamp", "entry level", "seeking first", "0-2 years", "1-3 years"]
-        
+        junior_indicators = [
+            # Experience level phrases
+            "junior", "entry", "fresher", "beginner", "early", "starting",
+
+            # Education / transition
+            "graduate", "recent graduate", "new graduate", "final year",
+            "bootcamp", "intern", "internship", "trainee", "learning",
+
+            # Experience years
+            "0 years", "1 year", "2 years", "3 years"
+
+            # Responsibility cues
+            "assisted", "supported", "worked under",
+            "followed guidance", "contributed",
+            "basic understanding", "fundamentals",
+            "hands-on practice", "hands on practice",
+
+            # Job intent
+            "seeking", "first role", "looking for opportunity",
+            "open to learning", "eager to learn"
+        ]
+
+        senior_indicators = [
+            # Titles / level
+            "senior", "lead", "principal", "staff",
+            "technical lead", "team lead",
+
+            # Leadership & ownership
+            "led", "managed", "owned", "mentored", "guided",
+            "hired", "interviewed", "decision making",
+
+            # Experience years
+            "4 years", "5 years", "6 years", "7 years",
+            "8 years", "9 years", "10 years", "11 years", "12 years",
+        ]
+
+
         senior_count = sum(1 for indicator in senior_indicators if indicator in response_lower)
         junior_count = sum(1 for indicator in junior_indicators if indicator in response_lower)
         
@@ -407,23 +346,9 @@ class ResponseAnalyzer:
         word_count = len(response.split())
         
         # Enhanced skill inference
-        skill_indicators = {
-            "backend": ["python", "java", "spring", "django", "flask", "node", "express", "api", "server", "database", "sql"],
-            "frontend": ["react", "angular", "vue", "javascript", "typescript", "html", "css", "ui", "frontend", "webpack"],
-            "devops": ["aws", "docker", "kubernetes", "terraform", "ci/cd", "devops", "infrastructure", "jenkins", "ansible"],
-            "data": ["machine learning", "data science", "ai", "ml", "tensorflow", "pytorch", "analytics", "pandas", "numpy"],
-            "mobile": ["android", "ios", "mobile", "react native", "flutter", "swift", "kotlin", "xcode"]
-        }
         
-        skill_scores = {skill: 0 for skill in skill_indicators.keys()}
-        for skill in skills:
-            for skill_type, indicators in skill_indicators.items():
-                if any(indicator in skill.lower() for indicator in indicators):
-                    skill_scores[skill_type] += 1
-        
-        primary_skill = max(skill_scores, key=skill_scores.get) # type: ignore
-        if skill_scores[primary_skill] == 0:
-            primary_skill = "backend"
+        primary_skill = SkillDetector.detect_primary_skill(response)
+
         
         # Enhanced experience inference
         senior_keywords = ["led", "managed", "architected", "designed", "mentored", "10+", "6+", "7+", "8+", "9+", "senior", "principal", "lead"]
@@ -530,8 +455,8 @@ class ResponseAnalyzer:
             Depth: [score]
             Practicality: [score]
             Overall: [average score]
-            Strengths: [1-2 key strengths]
-            Weaknesses: [1-2 areas for improvement]
+            Strengths: [key strengths]
+            Weaknesses: [areas for improvement]
         """
         
         try:
@@ -622,6 +547,7 @@ class ResponseAnalyzer:
                 scores["strengths"].append(line.strip())
             elif weaknesses_found and line_lower and not line_lower.startswith(("technical", "completeness", "clarity", "depth", "practicality", "overall", "strengths")):
                 scores["weaknesses"].append(line.strip())
+
         
         # Adjust based on word count (80-200 words ideal for technical answers)
         if 80 <= word_count <= 200:

@@ -608,7 +608,7 @@ def generate_readable_report_locally(report_data: dict) -> str:
     return report
 
 def main():
-    st.title("📊 HR Interview Dashboard")
+    st.title("HR Dashboard")
     st.markdown("Analyze candidate interview results and performance metrics")
     
     # Load reports
@@ -806,7 +806,7 @@ def main():
         return
     
     # Create tabs for different views
-    tab1, tab2 = st.tabs(["🔍 Detailed View", "📊 Summary Analytics"])
+    tab1, tab2 = st.tabs(["🔍 Detailed View ", "📊 Summary Analytics"])
     
     with tab1:
         # Display each report in an expander
@@ -970,7 +970,7 @@ def main():
             
             # Display DataFrame with styling
             st.dataframe(
-                df.style.applymap(
+                df.style.applymap( # type: ignore
                     lambda x: 'color: #10b981' if x == 'Selected' else 
                              ('color: #f59e0b' if x == 'Conditional' else 
                              ('color: #ef4444' if x == 'Rejected' else 'color: #64748b')),

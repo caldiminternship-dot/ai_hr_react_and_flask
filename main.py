@@ -1,5 +1,6 @@
 import sys
 from interview_manager import InterviewManager
+from config import MAX_QUESTIONS
 from utils import format_response, Fore, Style
 
 def main():
@@ -48,7 +49,7 @@ def main():
             question_count += 1
             
             # Display question only once here
-            print(format_response(f"\n[Question {question_count}/{manager.max_questions}]", Fore.CYAN))
+            print(format_response(f"\n[Question {question_count}/{MAX_QUESTIONS}]", Fore.CYAN))
             print(format_response(f"Interviewer: {question}", Fore.BLUE + Style.BRIGHT))
             
             # Get response

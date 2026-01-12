@@ -1,14 +1,14 @@
 import re
 from typing import Dict, List, Tuple
 from colorama import Fore, Style, init
-
 # Initialize colorama
-init(autoreset=True)
+init(autoreset=True)\
 
+# ok
 def format_response(text: str, color: str = Fore.WHITE) -> str:
     """Format text with colors"""
     return f"{color}{text}{Style.RESET_ALL}"
-
+# ok
 def extract_skills(text: str) -> List[str]:
     """Extract technical skills from text"""
     common_skills = [
@@ -59,7 +59,7 @@ def extract_skills(text: str) -> List[str]:
             unique_skills.append(skill)
     
     return unique_skills
-
+# ok
 def calculate_performance_score(responses: List[Dict]) -> float:
     """Calculate candidate performance score"""
     if not responses:
@@ -71,15 +71,7 @@ def calculate_performance_score(responses: List[Dict]) -> float:
         scores.append(score)
     
     return sum(scores) / len(scores)
-
-def clean_text(text: str) -> str:
-    """Clean and normalize text"""
-    text = re.sub(r'\s+', ' ', text)
-    text = text.strip()
-    return text
-
-# Add these new functions to utils.py
-
+# ok
 def calculate_detailed_score(responses: List[Dict]) -> Dict:
     """Calculate detailed performance scores"""
     if not responses:
@@ -116,7 +108,7 @@ def calculate_detailed_score(responses: List[Dict]) -> Dict:
             result[key] = 0
     
     return result
-
+# ok
 def analyze_response_quality(response_text: str) -> Dict:
     """Analyze response quality metrics"""
     words = response_text.split()
@@ -137,138 +129,146 @@ def analyze_response_quality(response_text: str) -> Dict:
     
     return metrics
 
-def get_performance_feedback(avg_score: float, detailed_scores: Dict) -> str:
-    """Generate performance feedback based on scores"""
-    if avg_score >= 8.5:
-        return "Excellent - Demonstrates deep understanding and clear communication"
-    elif avg_score >= 7.0:
-        return "Good - Shows solid understanding with room for refinement"
-    elif avg_score >= 5.5:
-        return "Average - Basic understanding but lacks depth in some areas"
-    elif avg_score >= 4.0:
-        return "Below Average - Struggles with technical concepts"
-    else:
-        return "Poor - Significant gaps in knowledge and communication"
 
-def format_score_bar(score: float, max_score: float = 10) -> str:
-    """Create a visual score bar"""
-    bars = int((score / max_score) * 20)
-    bar = "█" * bars + "░" * (20 - bars)
-    return f"{bar} {score:.1f}/10"
+def clean_text(text: str) -> str:
+    """Clean and normalize text"""
+    text = re.sub(r'\s+', ' ', text)
+    text = text.strip()
+    return text
 
-# Add to utils.py
 
-def analyze_technical_content(answer: str) -> Dict:
-    """Analyze technical content of an answer"""
-    technical_indicators = {
-        "architecture_terms": ["microservices", "monolithic", "scalable", "distributed", "load balancing"],
-        "coding_terms": ["algorithm", "data structure", "time complexity", "space complexity", "optimization"],
-        "system_design": ["database", "cache", "API", "endpoint", "protocol", "authentication"],
-        "problem_solving": ["approach", "solution", "alternative", "trade-off", "consideration"]
-    }
-    
-    result = {}
-    answer_lower = answer.lower()
-    
-    for category, terms in technical_indicators.items():
-        found_terms = [term for term in terms if term in answer_lower]
-        result[category] = {
-            "count": len(found_terms),
-            "terms": found_terms
-        }
-    
-    return result
+# def get_performance_feedback(avg_score: float, detailed_scores: Dict) -> str:
+#     """Generate performance feedback based on scores"""
+#     if avg_score >= 8.5:
+#         return "Excellent - Demonstrates deep understanding and clear communication"
+#     elif avg_score >= 7.0:
+#         return "Good - Shows solid understanding with room for refinement"
+#     elif avg_score >= 5.5:
+#         return "Average - Basic understanding but lacks depth in some areas"
+#     elif avg_score >= 4.0:
+#         return "Below Average - Struggles with technical concepts"
+#     else:
+#         return "Poor - Significant gaps in knowledge and communication"
 
-def generate_strengths_analysis(responses: List[Dict]) -> List[str]:
-    """Generate strengths analysis based on responses"""
-    strengths = []
-    
-    if not responses:
-        return ["No responses to analyze"]
-    
-    # Analyze technical depth
-    high_depth_responses = [r for r in responses if r.get('evaluation', {}).get('depth', 0) >= 7]
-    if len(high_depth_responses) >= len(responses) * 0.4:
-        strengths.append("Demonstrates good technical depth in responses")
-    
-    # Analyze clarity
-    high_clarity_responses = [r for r in responses if r.get('evaluation', {}).get('clarity', 0) >= 7]
-    if len(high_clarity_responses) >= len(responses) * 0.4:
-        strengths.append("Communicates technical concepts clearly")
-    
-    # Check for examples
-    responses_with_examples = 0
-    for response in responses:
-        answer = response.get('answer', '')
-        if any(indicator in answer.lower() for indicator in ['for example', 'for instance', 'in my project', 'i implemented']):
-            responses_with_examples += 1
-    
-    if responses_with_examples >= len(responses) * 0.3:
-        strengths.append("Effectively uses real-world examples")
-    
-    # Check response length consistency
-    word_counts = [r.get('word_count', 0) for r in responses if r.get('word_count', 0) > 0]
-    if word_counts:
-        avg_words = sum(word_counts) / len(word_counts)
-        if 80 <= avg_words <= 200:
-            strengths.append("Maintains appropriate response length")
-    
-    return strengths[:3]  # Return top 3 strengths
+# def format_score_bar(score: float, max_score: float = 10) -> str:
+#     """Create a visual score bar"""
+#     bars = int((score / max_score) * 20)
+#     bar = "█" * bars + "░" * (20 - bars)
+#     return f"{bar} {score:.1f}/10"
 
-def generate_weaknesses_analysis(responses: List[Dict]) -> List[str]:
-    """Generate weaknesses analysis based on responses"""
-    weaknesses = []
+# def analyze_technical_content(answer: str) -> Dict:
+#     """Analyze technical content of an answer"""
+#     technical_indicators = {
+#         "architecture_terms": ["microservices", "monolithic", "scalable", "distributed", "load balancing"],
+#         "coding_terms": ["algorithm", "data structure", "time complexity", "space complexity", "optimization"],
+#         "system_design": ["database", "cache", "API", "endpoint", "protocol", "authentication"],
+#         "problem_solving": ["approach", "solution", "alternative", "trade-off", "consideration"]
+#     }
     
-    if len(responses) <= 1:
-        return ["Insufficient responses for detailed analysis"]
+#     result = {}
+#     answer_lower = answer.lower()
     
-    # Check for low scores in key areas
-    low_accuracy = [r for r in responses if r.get('evaluation', {}).get('technical_accuracy', 0) < 5]
-    if len(low_accuracy) >= len(responses) * 0.3:
-        weaknesses.append("Needs improvement in technical accuracy")
+#     for category, terms in technical_indicators.items():
+#         found_terms = [term for term in terms if term in answer_lower]
+#         result[category] = {
+#             "count": len(found_terms),
+#             "terms": found_terms
+#         }
     
-    low_completeness = [r for r in responses if r.get('evaluation', {}).get('completeness', 0) < 5]
-    if len(low_completeness) >= len(responses) * 0.3:
-        weaknesses.append("Answers sometimes lack completeness")
-    
-    # Check for short responses
-    short_responses = [r for r in responses if r.get('word_count', 0) < 60 and r.get('question_type') != 'intro']
-    if len(short_responses) >= len(responses) * 0.3:
-        weaknesses.append("Some responses could be more detailed")
-    
-    # Check score consistency
-    scores = [r.get('score', 0) for r in responses]
-    if scores and max(scores) - min(scores) > 4:
-        weaknesses.append("Performance varies significantly across questions")
-    
-    return weaknesses[:3]  # Return top 3 weaknesses
+#     return result
 
-def calculate_recommendation(avg_score: float, responses: List[Dict]) -> str:
-    """Calculate recommendation based on scores and responses"""
+# def generate_strengths_analysis(responses: List[Dict]) -> List[str]:
+#     """Generate strengths analysis based on responses"""
+#     strengths = []
     
-    if len(responses) <= 1:
-        return "INCONCLUSIVE - Insufficient data"
+#     if not responses:
+#         return ["No responses to analyze"]
     
-    # Get technical and behavioral scores separately
-    tech_responses = [r for r in responses if r.get('question_type') == 'technical']
-    behavioral_responses = [r for r in responses if r.get('question_type') == 'behavioral']
+#     # Analyze technical depth
+#     high_depth_responses = [r for r in responses if r.get('evaluation', {}).get('depth', 0) >= 7]
+#     if len(high_depth_responses) >= len(responses) * 0.4:
+#         strengths.append("Demonstrates good technical depth in responses")
     
-    tech_score = 0
-    if tech_responses:
-        tech_score = sum(r.get('score', 0) for r in tech_responses) / len(tech_responses)
+#     # Analyze clarity
+#     high_clarity_responses = [r for r in responses if r.get('evaluation', {}).get('clarity', 0) >= 7]
+#     if len(high_clarity_responses) >= len(responses) * 0.4:
+#         strengths.append("Communicates technical concepts clearly")
     
-    behavioral_score = 0
-    if behavioral_responses:
-        behavioral_score = sum(r.get('score', 0) for r in behavioral_responses) / len(behavioral_responses)
+#     # Check for examples
+#     responses_with_examples = 0
+#     for response in responses:
+#         answer = response.get('answer', '')
+#         if any(indicator in answer.lower() for indicator in ['for example', 'for instance', 'in my project', 'i implemented']):
+#             responses_with_examples += 1
     
-    # Decision matrix
-    if avg_score >= 8.0 and tech_score >= 7.5:
-        return "STRONGLY ACCEPT - Excellent technical and communication skills"
-    elif avg_score >= 7.0 and tech_score >= 6.5:
-        return "ACCEPT - Strong candidate with good fundamentals"
-    elif avg_score >= 6.0 and tech_score >= 5.5:
-        return "CONDITIONAL ACCEPT - Shows potential with some areas to improve"
-    elif avg_score >= 5.0:
-        return "RECONSIDER AFTER IMPROVEMENT - Needs work on core technical areas"
-    else:
-        return "REJECT - Does not meet minimum technical requirements"
+#     if responses_with_examples >= len(responses) * 0.3:
+#         strengths.append("Effectively uses real-world examples")
+    
+#     # Check response length consistency
+#     word_counts = [r.get('word_count', 0) for r in responses if r.get('word_count', 0) > 0]
+#     if word_counts:
+#         avg_words = sum(word_counts) / len(word_counts)
+#         if 80 <= avg_words <= 200:
+#             strengths.append("Maintains appropriate response length")
+    
+#     return strengths[:3]  # Return top 3 strengths
+
+# def generate_weaknesses_analysis(responses: List[Dict]) -> List[str]:
+#     """Generate weaknesses analysis based on responses"""
+#     weaknesses = []
+    
+#     if len(responses) <= 1:
+#         return ["Insufficient responses for detailed analysis"]
+    
+#     # Check for low scores in key areas
+#     low_accuracy = [r for r in responses if r.get('evaluation', {}).get('technical_accuracy', 0) < 5]
+#     if len(low_accuracy) >= len(responses) * 0.3:
+#         weaknesses.append("Needs improvement in technical accuracy")
+    
+#     low_completeness = [r for r in responses if r.get('evaluation', {}).get('completeness', 0) < 5]
+#     if len(low_completeness) >= len(responses) * 0.3:
+#         weaknesses.append("Answers sometimes lack completeness")
+    
+#     # Check for short responses
+#     short_responses = [r for r in responses if r.get('word_count', 0) < 60 and r.get('question_type') != 'intro']
+#     if len(short_responses) >= len(responses) * 0.3:
+#         weaknesses.append("Some responses could be more detailed")
+    
+#     # Check score consistency
+#     scores = [r.get('score', 0) for r in responses]
+#     if scores and max(scores) - min(scores) > 4:
+#         weaknesses.append("Performance varies significantly across questions")
+    
+#     return weaknesses[:3]  # Return top 3 weaknesses
+
+# def calculate_recommendation(avg_score: float, responses: List[Dict]) -> str:
+    
+#     """Calculate recommendation based on scores and responses"""
+    
+#     if len(responses) <= 1:
+#         return "INCONCLUSIVE - Insufficient data"
+    
+#     # Get technical and behavioral scores separately
+#     tech_responses = [r for r in responses if r.get('question_type') == 'technical']
+#     behavioral_responses = [r for r in responses if r.get('question_type') == 'behavioral']
+    
+#     tech_score = 0
+#     if tech_responses:
+#         tech_score = sum(r.get('score', 0) for r in tech_responses) / len(tech_responses)
+    
+#     behavioral_score = 0
+#     if behavioral_responses:
+#         behavioral_score = sum(r.get('score', 0) for r in behavioral_responses) / len(behavioral_responses)
+    
+#     # Decision matrix
+#     if avg_score >= 8.0 and tech_score >= 7.5:
+#         return "STRONGLY ACCEPT - Excellent technical and communication skills"
+#     elif avg_score >= 7.0 and tech_score >= 6.5:
+#         return "ACCEPT - Strong candidate with good fundamentals"
+#     elif avg_score >= 6.0 and tech_score >= 5.5:
+#         return "CONDITIONAL ACCEPT - Shows potential with some areas to improve"
+#     elif avg_score >= 5.0:
+#         return "RECONSIDER AFTER IMPROVEMENT - Needs work on core technical areas"
+#     else:
+#         return "REJECT - Does not meet minimum technical requirements"
+    

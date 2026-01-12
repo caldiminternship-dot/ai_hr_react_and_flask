@@ -1,11 +1,10 @@
 import time
+import openai
 from typing import Dict, List
-from utils import Fore, Style, format_response, calculate_performance_score, calculate_detailed_score, get_performance_feedback
+from utils import calculate_performance_score, calculate_detailed_score
 from question_generator import QuestionGenerator
 from response_analyzer import ResponseAnalyzer
-from config import MAX_QUESTIONS, MIN_QUESTIONS
-import openai
-from config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL
+from config import MAX_QUESTIONS, MIN_QUESTIONS, OPENROUTER_API_KEY, OPENROUTER_BASE_URL
 
 class InterviewManager: 
     def __init__(self):
@@ -23,7 +22,9 @@ class InterviewManager:
         self.current_question_count = 0
         self.needs_more_info = False
         self.technical_question_count = 0
-        self.report_filename = None
+        # Create timestamp for filename
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        self.report_filename = f"reports/interview_report_{timestamp}.txt"
     
     def start_interview(self):
         """Start the interview session"""
@@ -179,9 +180,11 @@ class InterviewManager:
         
         self.needs_more_info = False
         return {"terminate": False}
-    
-    def get_next_question(self) -> str:
+
+    def get_next_question(self):
         """Get the next AI-generated question based on interview progress"""
+        
+        question_type = "Technical"  # Default type
         
         # If it's the first follow-up question (after introduction)
         if self.current_question_count == 1:
@@ -200,6 +203,7 @@ class InterviewManager:
                     self.interview_data["candidate_info"],
                     self.interview_data["responses"]
                 )
+                question_type = "Behavioral"  # Set type for behavioral questions
             else:
                 # Generate adaptive technical question
                 skill_category = self.interview_data["candidate_info"].get("primary_skill", "backend")
@@ -207,6 +211,7 @@ class InterviewManager:
                     skill_category,
                     self.interview_data["responses"]
                 )
+                question_type = "Technical"  # Explicitly set type
         
         if question:
             # Clean question for display
@@ -216,7 +221,7 @@ class InterviewManager:
                     clean_question = question.split("] ", 1)[1]
             
             # Store with tag for tracking
-            tagged_question = f"[AI-Generated {question_type if 'question_type' in locals() else 'Technical'}] {clean_question}"
+            tagged_question = f"[AI-Generated {question_type}] {clean_question}"
             if "questions_asked" not in self.interview_data:
                 self.interview_data["questions_asked"] = []
             self.interview_data["questions_asked"].append(tagged_question)
@@ -224,7 +229,7 @@ class InterviewManager:
             # Log to report
             self._write_to_report("\n" + "="*40)
             self._write_to_report(f"Question {len(self.interview_data['questions_asked'])}:", include_timestamp=True)
-            self._write_to_report(f"Type: {question_type if 'question_type' in locals() else 'Technical'}")
+            self._write_to_report(f"Type: {question_type}")
             self._write_to_report(f"Content: {clean_question}")
             self._write_to_report("="*40)
             
@@ -233,8 +238,8 @@ class InterviewManager:
             
             return clean_question
         
-        return None
-    
+        return ""
+
     def should_continue(self) -> bool:
         """Determine if interview should continue"""
         total_questions = len(self.interview_data.get("questions_asked", [])) - 1
@@ -336,7 +341,7 @@ class InterviewManager:
                 max_tokens=150
             )
             
-            return response.choices[0].message.content.strip()
+            return response.choices[0].message.content.strip() # type: ignore
             
         except Exception as e:
             return "AI analysis unavailable. See detailed scores below."
@@ -344,13 +349,34 @@ class InterviewManager:
     def _write_comprehensive_report(self, avg_score: float, detailed_scores: Dict, ai_summary: str):
         """Write comprehensive interview report to file"""
         try:
-            # Your existing report writing code (simplified)
             with open(self.report_filename, 'w', encoding='utf-8') as f:
                 f.write("="*70 + "\n")
                 f.write("VIRTUAL HR INTERVIEWER - COMPREHENSIVE INTERVIEW REPORT\n")
                 f.write("="*70 + "\n\n")
                 
-                # Add your report content here...
+                # ✅ ADD INTRODUCTION SECTION
+                f.write("CANDIDATE INTRODUCTION\n")
+                f.write("-"*40 + "\n")
+                
+                if self.interview_data.get("responses"):
+                    # Get introduction (first response)
+                    intro_response = self.interview_data["responses"][0]
+                    f.write(f"Question: {intro_response.get('question', 'Tell me about yourself')}\n")
+                    f.write(f"Answer: {intro_response.get('answer', '')[:500]}...\n")  # First 500 chars
+                    f.write(f"Word Count: {intro_response.get('word_count', 0)}\n")
+                    f.write(f"Intro Score: {intro_response.get('score', 0)}/10\n\n")
+                
+                # ✅ ADD CANDIDATE PROFILE
+                candidate_info = self.interview_data.get("candidate_info", {})
+                if candidate_info:
+                    f.write("CANDIDATE PROFILE\n")
+                    f.write("-"*40 + "\n")
+                    f.write(f"Skills: {', '.join(candidate_info.get('skills', []))}\n")
+                    f.write(f"Experience Level: {candidate_info.get('experience', 'mid')}\n")
+                    f.write(f"Primary Skill: {candidate_info.get('primary_skill', 'N/A')}\n")
+                    f.write(f"Confidence: {candidate_info.get('confidence', 'medium')}\n\n")
+                
+                # Add scores
                 f.write(f"Average Score: {avg_score:.1f}/10\n")
                 f.write(f"AI Summary: {ai_summary}\n")
                 

@@ -5,10 +5,11 @@ from datetime import datetime
 import base64
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import json
+from config import MAX_QUESTIONS
 from response_analyzer import ResponseAnalyzer
 from report_manager import ReportManager
 from question_generator import QuestionGenerator
-import json
 
 # Initialize report manager
 report_manager = ReportManager()
@@ -529,6 +530,7 @@ st.markdown(css, unsafe_allow_html=True)
 # Initialize session state
 def init_session_state():
     defaults = {
+        'intro_question' : "Tell me about yourself, including your projects, technical skills, and work experience.",
         'interview_started': False,
         'interview_active': False,
         'interview_completed': False,
@@ -545,7 +547,7 @@ def init_session_state():
         'termination_reason': '',
         'termination_log': [],
         'current_response': '',
-        'total_questions_to_ask': 15,
+        'total_questions_to_ask': MAX_QUESTIONS,
         'questions_generated': False,
         # TAB SWITCHING DETECTION VARIABLES
         'tab_switch_count': 0,
@@ -684,7 +686,26 @@ def process_response(response_text):
             # For introduction (first response)
             if st.session_state.current_question_index == 0:
                 analysis = analyzer.analyze_introduction(response_text)
+                intro_evaluation = {
+                    "question": "Tell me about yourself, including your projects, technical skills, and work experience.",
+                    "answer": response_text,
+                    "evaluation": {
+                        "overall": analysis.get("intro_score", 5),
+                        "technical_accuracy": analysis.get("intro_score", 5),
+                        "completeness": 5,
+                        "clarity": 5,
+                        "depth": 5,
+                        "practicality": 5,
+                        "strengths": [],
+                        "weaknesses": []
+                    },
+                    "timestamp": datetime.now().strftime("%H:%M:%S"),
+                    "question_type": "intro"
+                }
                 
+                # Store as first evaluation
+                st.session_state.question_evaluations.insert(0, intro_evaluation)  # Add at beginning
+
                 # Check if interview was terminated by AI analysis
                 if analysis.get("terminated", False):
                     st.session_state.interview_terminated = True
@@ -826,7 +847,7 @@ def show_interview_in_progress():
     
     # Question display
     if not st.session_state.get("introduction_analyzed", False):
-        current_prompt = "Please introduce yourself, including your experience, skills, and relevant projects."
+        current_prompt =  st.session_state["intro_question"]
     else:
         current_question = get_next_question()
         if current_question:
@@ -852,7 +873,7 @@ def show_interview_in_progress():
     # Submit button
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        if st.button("📤 Submit Response", type="primary", use_container_width=True, key=f"submit_response_{st.session_state.current_question_index}"):
+        if st.button("Submit Response", type="primary", use_container_width=True, key=f"submit_response_{st.session_state.current_question_index}"):
             if response and response.strip():
                 # Process the response
                 process_response(response.strip())
@@ -1014,7 +1035,7 @@ def show_report():
     
     next_steps = [
         ("📄 Response Analysis", "Your answers are being processed by our AI system"),
-        ("🤖  AI Evaluation", " Adaptive question performance analyzed for skill assessment"),
+        ("📝 AI Evaluation", "Adaptive question performance analyzed for skill assessment"),
         ("👥 HR Review", "The HR team will review your interview results"),
         ("📧 Contact", "You will be contacted regarding next steps within 3-5 business days")
     ]
@@ -1130,8 +1151,7 @@ def generate_readable_report(report_data: dict) -> str:
     report += f"Interview Type: {'AI Adaptive' if report_data.get('adaptive_interview', False) else 'Standard'}\n"
     
     # Use get() with default values
-    total_questions = report_data.get('total_questions_answered', 
-                                    len(report_data.get('question_evaluations', [])))
+    total_questions = report_data.get('total_questions_answered', len(report_data.get('question_evaluations', [])))
     report += f"Total Questions Answered: {total_questions}\n"
     
     report += f"Overall Score: {report_data.get('overall_score', 0):.2f}/10\n"
@@ -1262,6 +1282,26 @@ def main():
         let tabCount = {st.session_state.get('tab_switch_count', 0)};
         let warned = {str(st.session_state.get('tab_warning_given', False)).lower()};
         
+        // Helper function to set a cookie
+        function setCookie(name, value, minutes) {{
+            const date = new Date();
+            date.setTime(date.getTime() + (minutes * 60 * 1000));
+            const expires = "expires=" + date.toUTCString();
+            document.cookie = name + "=" + value + ";" + expires + ";path=/";
+        }}
+        
+        // Helper function to get a cookie
+        function getCookie(name) {{
+            const nameEQ = name + "=";
+            const ca = document.cookie.split(';');
+            for(let i = 0; i < ca.length; i++) {{
+                let c = ca[i];
+                while (c.charAt(0) === ' ') c = c.substring(1);
+                if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length);
+            }}
+            return null;
+        }}
+        
         document.addEventListener('visibilitychange', function() {{
             if (document.hidden) {{
                 tabCount++;
@@ -1272,57 +1312,70 @@ def main():
                     warned = true;
                     alert('⚠️ WARNING: Tab switching detected. Next switch will terminate the interview immediately!');
                     
-                    // Update URL to communicate with Streamlit
-                    const url = new URL(window.location);
-                    url.searchParams.set('tab_warning', 'true');
-                    url.searchParams.set('tab_count', tabCount);
-                    window.history.replaceState({{}}, '', url);
+                    // Store in cookies (works with about:srcdoc)
+                    setCookie('tab_warning', 'true', 5); // 5 minutes expiry
+                    setCookie('tab_count', tabCount, 5);
                     
-                    // Force page reload to update session state
-                    setTimeout(() => window.location.reload(), 500);
+                    // Reload to update Streamlit state
+                    setTimeout(() => location.reload(), 500);
                     
                 }} else if (tabCount >= 2) {{
                     // SECOND SWITCH - TERMINATE IMMEDIATELY
-                    alert('❌ INTERVIEW TERMINATED: Multiple tab switches detected. This violates interview rules.');
-                    
-                    // Set termination flag in URL
-                    const url = new URL(window.location);
-                    url.searchParams.set('terminate_tab', 'true');
-                    url.searchParams.set('tab_count', tabCount);
-                    window.history.replaceState({{}}, '', url);
-                    
-                    // Auto-fill termination message
                     setTimeout(() => {{
-                        const textareas = document.querySelectorAll('textarea');
-                        for (let textarea of textareas) {{
-                            if (textarea.placeholder && textarea.placeholder.includes('Type your detailed response')) {{
-                                textarea.value = 'session terminated due to tab switching';
-                                const inputEvent = new Event('input', {{ bubbles: true }});
-                                textarea.dispatchEvent(inputEvent);
-                                
-                                // Auto-click submit button
-                                const buttons = document.querySelectorAll('button');
-                                for (let button of buttons) {{
-                                    if (button.innerText && (
-                                        button.innerText.includes('Submit Response') || 
-                                        button.innerText.includes('📤 Submit Response')
-                                    )) {{
-                                        setTimeout(() => button.click(), 300);
-                                        break;
-                                    }}
-                                }}
-                                break;
-                            }}
-                        }}
+                        alert("❌ INTERVIEW TERMINATED: Multiple tab switches detected.");
+                        
+                        // Set termination in cookies
+                        setCookie('tab_terminated', 'true', 5);
+                        setCookie('tab_count', tabCount, 5);
+                        
+                        // Reload to let Streamlit handle termination
+                        setTimeout(() => {{
+                            window.location.reload();
+                        }}, 1000);
                     }}, 300);
-                    
-                    // Force immediate reload
-                    setTimeout(() => window.location.reload(), 1000);
                 }}
             }}
         }});
         
-        // Prevent keyboard shortcuts
+        // On page load, check cookies for termination or warning
+        window.addEventListener('load', function() {{
+            // Check for termination
+            const terminated = getCookie('tab_terminated');
+            const savedCount = getCookie('tab_count');
+            
+            if (terminated === 'true') {{
+                // Clear cookies by setting expired date
+                setCookie('tab_terminated', '', -1);
+                setCookie('tab_count', '', -1);
+                
+                // Set a flag that Streamlit can check
+                document.body.setAttribute('data-tab-terminated', 'true');
+                if (savedCount) {{
+                    document.body.setAttribute('data-tab-count', savedCount);
+                }}
+                
+                // Add a hidden input with termination data
+                const hiddenInput = document.createElement('input');
+                hiddenInput.type = 'hidden';
+                hiddenInput.id = 'tab_termination_data';
+                hiddenInput.value = JSON.stringify({{terminated: true, count: savedCount}});
+                document.body.appendChild(hiddenInput);
+            }}
+            
+            // Check for warning
+            const savedWarning = getCookie('tab_warning');
+            if (savedWarning === 'true') {{
+                setCookie('tab_warning', '', -1);
+                
+                // Set warning flag
+                document.body.setAttribute('data-tab-warning', 'true');
+                if (savedCount) {{
+                    document.body.setAttribute('data-tab-count', savedCount);
+                }}
+            }}
+        }});
+        
+        // Prevent keyboard shortcuts for new tabs/windows
         document.addEventListener('keydown', function(e) {{
             if ((e.ctrlKey || e.metaKey) && ['t', 'n', 'T', 'N'].includes(e.key)) {{
                 e.preventDefault();
@@ -1330,48 +1383,179 @@ def main():
                 
                 if (tabCount >= 2) {{
                     alert('❌ INTERVIEW TERMINATED: Attempted to open new tab/window.');
-                    const url = new URL(window.location);
-                    url.searchParams.set('terminate_tab', 'true');
-                    url.searchParams.set('tab_count', tabCount);
-                    window.history.replaceState({{}}, '', url);
-                    setTimeout(() => window.location.reload(), 500);
+                    
+                    // Set termination in cookies
+                    setCookie('tab_terminated', 'true', 5);
+                    setCookie('tab_count', tabCount, 5);
+                    
+                    setTimeout(() => location.reload(), 500);
                 }}
             }}
         }});
         </script>
         """
         
-        st.components.v1.html(js_code, height=0)
-    
-    # ===== CHECK URL PARAMETERS =====
-    query_params = st.query_params
-    
-    # Check for tab warning
-    if 'tab_warning' in query_params and query_params['tab_warning'][0] == 'true':
-        st.session_state.tab_warning_given = True
-        if 'tab_count' in query_params:
-            st.session_state.tab_switch_count = int(query_params['tab_count'][0])
+        st.components.v1.html(js_code, height=0)  # type: ignore
         
-        # Clear URL parameters
-        st.query_params.clear()
-        st.rerun()
-    
-    # Check for termination due to tab switching
-    if 'terminate_tab' in query_params and query_params['terminate_tab'][0] == 'true':
-        st.session_state.auto_terminate_tab_switch = True
-        if 'tab_count' in query_params:
-            st.session_state.tab_switch_count = int(query_params['tab_count'][0])
+        # Add a component to check for termination/warning flags in DOM
+        checker_js = """
+        <script>
+        // Check if termination or warning flags are set
+        window.addEventListener('load', function() {
+            const terminated = document.body.getAttribute('data-tab-terminated');
+            const warning = document.body.getAttribute('data-tab-warning');
+            const count = document.body.getAttribute('data-tab-count');
+            
+            if (terminated === 'true' || warning === 'true') {
+                // Trigger a Streamlit rerun by changing window location hash
+                setTimeout(() => {
+                    // Create a custom event that Streamlit might pick up
+                    const event = new CustomEvent('tabDetection', {
+                        detail: {
+                            terminated: terminated === 'true',
+                            warning: warning === 'true',
+                            count: count
+                        }
+                    });
+                    window.dispatchEvent(event);
+                    
+                    // Also try to trigger via parent window
+                    if (window.parent) {
+                        window.parent.postMessage({
+                            type: 'streamlit:setComponentValue',
+                            value: {
+                                tabTerminated: terminated === 'true',
+                                tabWarning: warning === 'true',
+                                tabCount: count
+                            }
+                        }, '*');
+                    }
+                }, 100);
+            }
+        });
+        </script>
+        """
+        st.components.v1.html(checker_js, height=0)  # type: ignore
         
-        # Clear URL parameters
-        st.query_params.clear()
-        st.rerun()
+        # Show tab switching warning in the UI
+        if st.session_state.tab_switch_count >= 1:
+            st.warning("⚠️ **Tab switching is being monitored.** Multiple switches will terminate the interview.")
     
-    # ===== DIRECT TERMINATION CHECK =====
+    # ===== CHECK FOR TAB SWITCHING VIA COOKIES/DOM =====
+    # We need a way to check for tab switching since we can't use URL params in about:srcdoc
+    # This is a workaround using JavaScript to set flags
+    
+    # Check if we need to update tab switch count from previous detection
+    if st.session_state.interview_active:
+        # Create a JavaScript component to check for tab switching data
+        check_tab_js = """
+        <script>
+        // Check for tab termination/warning data that might have been set
+        function checkTabData() {
+            const terminated = document.body.getAttribute('data-tab-terminated');
+            const warning = document.body.getAttribute('data-tab-warning');
+            const count = document.body.getAttribute('data-tab-count');
+            
+            if (terminated || warning) {
+                // Send data back to Streamlit via window message
+                window.parent.postMessage({
+                    type: 'TAB_DATA',
+                    data: {
+                        terminated: terminated === 'true',
+                        warning: warning === 'true',
+                        count: count ? parseInt(count) : 0
+                    }
+                }, '*');
+                
+                // Clear the attributes
+                document.body.removeAttribute('data-tab-terminated');
+                document.body.removeAttribute('data-tab-warning');
+                document.body.removeAttribute('data-tab-count');
+                
+                return true;
+            }
+            return false;
+        }
+        
+        // Check on load
+        window.addEventListener('load', function() {
+            setTimeout(checkTabData, 500);
+        });
+        
+        // Also check periodically
+        setInterval(checkTabData, 1000);
+        </script>
+        """
+        
+        # Add message listener for tab data
+        message_listener = """
+        <script>
+        window.addEventListener('message', function(event) {
+            if (event.data.type === 'TAB_DATA') {
+                // Store in localStorage for Streamlit to pick up
+                localStorage.setItem('tab_switch_data', JSON.stringify(event.data.data));
+                
+                // Force a rerun by changing hash
+                window.location.hash = 'tab_check_' + Date.now();
+            }
+        });
+        </script>
+        """
+        
+        st.components.v1.html(check_tab_js + message_listener, height=0)  # type: ignore
+        
+        # Check localStorage for tab switch data (set by the JavaScript)
+        tab_data_js = """
+        <script>
+        // Check if there's tab switch data in localStorage
+        const tabData = localStorage.getItem('tab_switch_data');
+        if (tabData) {
+            // Clear it so we don't process it again
+            localStorage.removeItem('tab_switch_data');
+            
+            // Send to Streamlit
+            const data = JSON.parse(tabData);
+            if (data.terminated || data.warning) {
+                // Create a hidden input with the data
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.id = 'streamlit_tab_data';
+                input.value = tabData;
+                document.body.appendChild(input);
+                
+                // Trigger Streamlit to notice the change
+                setTimeout(() => {
+                    if (window.parent) {
+                        window.parent.postMessage({
+                            type: 'streamlit:update',
+                            data: data
+                        }, '*');
+                    }
+                }, 100);
+            }
+        }
+        </script>
+        """
+        st.components.v1.html(tab_data_js, height=0)  # type: ignore
+    
+    # ===== SIMPLIFIED TAB SWITCH HANDLING =====
+    # Since URL parameters don't work in about:srcdoc, we'll use a simpler approach
+    
+    # Check for termination based on tab switch count
     if st.session_state.get('tab_switch_count', 0) >= 2 and st.session_state.interview_active:
         st.session_state.interview_terminated = True
         st.session_state.termination_reason = "misconduct"
         st.session_state.interview_active = False
         st.session_state.auto_terminate_tab_switch = True
+        
+        # Log the termination
+        if "termination_log" not in st.session_state:
+            st.session_state.termination_log = []
+        st.session_state.termination_log.append({
+            "time": datetime.now().strftime("%H:%M:%S"),
+            "reason": "misconduct",
+            "details": f"Tab switching detected ({st.session_state.get('tab_switch_count', 0)} times)"
+        })
         
         st.rerun()
     
@@ -1447,6 +1631,7 @@ def main():
         show_interview_in_progress()
     elif st.session_state.interview_completed:
         show_report()
+
 
 if __name__ == "__main__":
     main()

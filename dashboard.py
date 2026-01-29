@@ -881,7 +881,7 @@ def main():
                         col_a, col_b = st.columns([2, 1])
                         with col_a:
                             st.write(f"**Question:** {eval_data['question']}")
-                            st.write(f"**Answer:** {eval_data['answer'][:300]}...")
+                            st.write(f"**Answer:** {eval_data['answer']}")
                         with col_b:
                             score = evaluation.get('overall', 0)
                             st.metric("Score", f"{score}/10")

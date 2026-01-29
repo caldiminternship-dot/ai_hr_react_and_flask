@@ -12,6 +12,12 @@ class ReportManager:
     
     def save_interview_report(self, session_state: Dict) -> str:
         """Save interview report to a file"""
+        # VALIDATION: Check if we have data to save
+        # We don't want to fail just because score is 0, but we need evaluations or at least some data
+        if not session_state.get('candidate_profile') and not session_state.get('question_evaluations'):
+            print("⚠️ Insufficient data for report (no profile or evaluations)")
+            return None
+
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"candidate_report_{timestamp}"
         
@@ -36,13 +42,19 @@ class ReportManager:
         return {
             "report_id": f"INT{datetime.now().strftime('%Y%m%d%H%M%S')}",
             "timestamp": datetime.now().isoformat(),
+            "display_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "candidate_profile": session_state.get('candidate_profile', {}),
             "question_evaluations": session_state.get('question_evaluations', []),
+            "questions_asked": session_state.get('questions', [])[:len(session_state.get('question_evaluations', []))],
             "overall_score": session_state.get('overall_score', 0),
             "final_score": session_state.get('final_score', 0),
-            "total_questions": len(session_state.get('questions', [])),
-            "questions_answered": len(session_state.get('question_evaluations', [])),
             "introduction_analyzed": session_state.get('introduction_analyzed', False),
+            "total_questions_answered": len(session_state.get('question_evaluations', [])),
+            "total_questions": len(session_state.get('questions', [])),
+            "messages": session_state.get('messages', [])[:10] if session_state.get('messages') else [],
+            "adaptive_interview": True,
+            "tab_switch_count": session_state.get('tab_switch_count', 0),
+            "terminated_by_tab_switch": session_state.get('auto_terminate_tab_switch', False),
             "interview_duration": self._calculate_duration(session_state),
             "analysis_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }

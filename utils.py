@@ -10,54 +10,31 @@ def format_response(text: str, color: str = Fore.WHITE) -> str:
     return f"{color}{text}{Style.RESET_ALL}"
 
 def extract_skills(text: str) -> List[str]:
-    """Extract technical skills from text"""
-    common_skills = [
-        "python", "java", "javascript", "typescript", "react", "angular", 
-        "vue", "node.js", "node", "express", "django", "flask", "spring",
-        "sql", "nosql", "mongodb", "postgresql", "mysql", "redis",
-        "aws", "azure", "gcp", "docker", "kubernetes", "terraform",
-        "jenkins", "git", "github", "gitlab", "linux", "unix",
-        "rest", "api", "graphql", "grpc", "microservices", "serverless",
-        "machine learning", "ml", "ai", "tensorflow", "pytorch",
-        "data analysis", "pandas", "numpy", "scikit-learn",
-        "html", "css", "sass", "less", "webpack", "babel",
-        "react native", "flutter", "android", "ios", "swift", "kotlin",
-        "c++", "c#", "go", "rust", "ruby", "php", "scala"
-    ]
-    
+    """Extract technical skills from text using config (Dynamic)"""
+    try:
+        from config import SKILL_CATEGORIES
+    except ImportError:
+        return []
+
     found_skills = []
     text_lower = text.lower()
     
-    for skill in common_skills:
-        if skill in text_lower:
-            # Check if it's a whole word (avoid matching "java" in "javascript")
-            pattern = r'\b' + re.escape(skill) + r'\b'
-            if re.search(pattern, text_lower):
-                found_skills.append(skill)
-    
-    # Also look for skill patterns
-    skill_patterns = [
-        (r'\b(full.?stack|full stack)\b', 'fullstack'),
-        (r'\b(front.?end|front end)\b', 'frontend'),
-        (r'\b(back.?end|back end)\b', 'backend'),
-        (r'\b(dev.?ops|dev ops)\b', 'devops'),
-        (r'\b(data.?science|data science)\b', 'data science'),
-        (r'\b(web.?development|web development)\b', 'web development'),
-        (r'\b(mobile.?development|mobile development)\b', 'mobile development'),
-    ]
-    
-    for pattern, skill_name in skill_patterns:
-        if re.search(pattern, text_lower, re.IGNORECASE):
-            found_skills.append(skill_name)
+    # Iterate through all categories in config
+    for category, keywords in SKILL_CATEGORIES.items():
+        for keyword in keywords:
+            # Check for keyword in text (case insensitive)
+            if keyword.lower() in text_lower:
+                found_skills.append(keyword)
     
     # Remove duplicates while preserving order
-    seen = set()
     unique_skills = []
+    seen = set()
     for skill in found_skills:
-        if skill not in seen:
-            seen.add(skill)
-            unique_skills.append(skill)
-    
+        skill_clean = skill.strip()
+        if skill_clean.lower() not in seen:
+            seen.add(skill_clean.lower())
+            unique_skills.append(skill_clean)
+            
     return unique_skills
 
 def calculate_performance_score(responses: List[Dict]) -> float:

@@ -4,7 +4,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 OPENROUTER_API_KEY = os.getenv("API_KEY") 
-OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+OPENROUTER_BASE_URL = "https://api.groq.com/openai/v1"
+MODEL_NAME = "llama-3.3-70b-versatile"
 
 # Interview settings
 MAX_QUESTIONS = 7
@@ -20,11 +21,13 @@ SKILL_CATEGORIES = {
     ],
 
     "frontend": [
+        "Frontend",
         "JavaScript", "React", "Angular", "Vue",
         "HTML", "CSS", "TypeScript"
     ],
 
     "fullstack": [
+        "Fullstack",
         "Frontend + Backend",
         "End-to-End Application Development",
         "System Design",
@@ -33,6 +36,7 @@ SKILL_CATEGORIES = {
 
     # Infrastructure & Cloud
     "devops": [
+        "DevOps",
         "AWS", "Azure", "GCP",
         "Docker", "Kubernetes",
         "CI/CD Pipelines",
@@ -41,6 +45,7 @@ SKILL_CATEGORIES = {
     ],
 
     "networking": [
+        "Networking", "Network Engineering",
         "Computer Networks",
         "TCP/IP",
         "Routing & Switching",
@@ -54,6 +59,7 @@ SKILL_CATEGORIES = {
 
     # Data & AI
     "data": [
+        "Data", "Data Science", "Data Engineering",
         "Python", "SQL",
         "Data Analysis",
         "Machine Learning",
@@ -64,6 +70,7 @@ SKILL_CATEGORIES = {
 
     # Mobile Development
     "mobile": [
+        "Mobile", "App Development",
         "Android",
         "iOS",
         "React Native",
@@ -72,7 +79,8 @@ SKILL_CATEGORIES = {
 
     # AEC / BIM / Core Engineering
     "aec_bim": [
-        "Tekla Structures",
+        "AEC", "BIM", "AEC_BIM",
+        "Tekla",
         "AutoCAD",
         "Structural Steel Detailing",
         "BIM Modeling",
@@ -86,6 +94,7 @@ SKILL_CATEGORIES = {
 
     # Human Resources
     "hr": [
+        "HR", "Human Resources",
         "Recruitment & Staffing",
         "Talent Acquisition",
         "HR Operations",
@@ -98,6 +107,7 @@ SKILL_CATEGORIES = {
 
     # Additional Useful Domains
     "qa_testing": [
+        "QA", "Testing", "Quality Assurance",
         "Manual Testing",
         "Automation Testing",
         "Selenium",
@@ -107,6 +117,7 @@ SKILL_CATEGORIES = {
     ],
 
     "ui_ux": [
+        "UI", "UX", "UI/UX", "Product Design",
         "User Research",
         "Wireframing",
         "Prototyping",
@@ -115,16 +126,8 @@ SKILL_CATEGORIES = {
         "Usability Testing"
     ],
 
-    "project_management": [
-        "Agile",
-        "Scrum",
-        "Kanban",
-        "JIRA",
-        "Risk Management",
-        "Stakeholder Communication"
-    ],
-
     "cybersecurity": [
+        "Cybersecurity", "Security", "InfoSec",
         "Information Security",
         "Threat Modeling",
         "Vulnerability Assessment",
@@ -138,4 +141,4 @@ SKILL_CATEGORIES = {
 
 # Termination keywords
 TERMINATION_KEYWORDS = ["quit", "exit", "stop", "end", "terminate", "abort"]
-ABUSIVE_KEYWORDS = ["tab switching", "stupid", "idiot", "dumb", "worthless", "hate", "useless", "terrible"]
+ABUSIVE_KEYWORDS = ["tab switching", "stupid", "idiot", "dumb", "worthless", "hate", "useless"]

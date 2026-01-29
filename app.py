@@ -1,6 +1,8 @@
 import streamlit as st
 import time
 import os
+from config import MODEL_NAME
+from skill_mapper import map_skills_to_category
 from datetime import datetime
 import base64
 import plotly.graph_objects as go
@@ -8,6 +10,7 @@ from plotly.subplots import make_subplots
 from response_analyzer import ResponseAnalyzer
 from report_manager import ReportManager
 from question_generator import QuestionGenerator
+from resume_parser import parse_resume
 import json
 
 # Initialize report manager
@@ -524,6 +527,8 @@ css = """
 </style>
 """
 
+
+
 st.markdown(css, unsafe_allow_html=True)
 
 # Initialize session state
@@ -534,6 +539,8 @@ def init_session_state():
         'interview_completed': False,
         'interview_terminated': False,
         'current_question_index': 0,
+        'technical_questions': [],
+        'behavioral_question': None,
         'questions': [],
         'messages': [],
         'candidate_profile': {},
@@ -545,7 +552,7 @@ def init_session_state():
         'termination_reason': '',
         'termination_log': [],
         'current_response': '',
-        'total_questions_to_ask': 15,
+        'total_questions_to_ask': 5, # 4 Technical + 1 Behavioral (Excluding Intro/Resume)
         'questions_generated': False,
         # TAB SWITCHING DETECTION VARIABLES
         'tab_switch_count': 0,
@@ -560,258 +567,240 @@ def init_session_state():
 init_session_state()
 
 def generate_adaptive_questions():
-    """Generate adaptive questions based on candidate profile"""
+    """
+    Generate ONLY domain-specific technical questions.
+    Behavioral questions must NOT be generated here.
+    """
     try:
-        if not st.session_state.candidate_profile:
-            return None
-        
-        skill_category = st.session_state.candidate_profile.get("primary_skill", "backend")
-        experience_level = st.session_state.candidate_profile.get("experience_level", "mid")
-        
-        # Generate initial skill-based questions
-        initial_questions = question_generator.generate_initial_skill_questions(
+        profile = st.session_state.get("candidate_profile", {})
+        if not profile:
+            return []
+
+        skill_category = profile.get("primary_skill", "backend")
+        experience_level = profile.get("experience_level", "mid")
+
+        # 🔒 Generate domain-locked technical questions
+        technical_questions = question_generator.generate_initial_skill_questions(
             skill_category=skill_category,
             candidate_level=experience_level
         )
-        
-        if not initial_questions:
-            # Fallback to default questions if AI generation fails
-            initial_questions = [
-                "Describe a challenging technical problem you solved recently and how you approached it.",
-                "Explain the difference between REST and GraphQL APIs and when you would use each.",
-                "How do you handle debugging a complex issue in a production system?"
+
+        # Fallback if AI fails
+        if not technical_questions:
+            technical_questions = [
+                f"Explain a core concept related to {skill_category}.",
+                f"Describe a real-world problem you solved using {skill_category}.",
+                f"What challenges do you commonly face when working in {skill_category}?"
             ]
-        
-        # Always include at least one behavioral question
-        behavioral_question = question_generator.generate_behavioral_question_ai(
-            candidate_background=st.session_state.candidate_profile,
-            context=st.session_state.question_evaluations
-        )
-        
-        if behavioral_question:
-            initial_questions.append(behavioral_question)
-        
-        return initial_questions[:st.session_state.total_questions_to_ask]
-    
+
+        # 🔒 STRICT: return ONLY technical questions
+        # Leave room for behavioral question later
+        max_technical = st.session_state.total_questions_to_ask - 1
+        return technical_questions[:max_technical]
+
     except Exception as e:
         st.error(f"Error generating adaptive questions: {e}")
-        # Fallback to static questions
+
+        # Safe technical-only fallback
         return [
-            "Describe a challenging technical problem you solved recently and how you approached it.",
-            "Explain the difference between REST and GraphQL APIs and when you would use each.",
-            "How do you handle debugging a complex issue in a production system?",
-            "Describe your experience with version control systems and your typical workflow.",
-            "What's your approach to learning new technologies or frameworks?",
-            "Tell me about a time you had to work with a difficult team member and how you handled it.",
-            "Where do you see yourself in your career in 3-5 years?"
+            "Describe a challenging technical problem you solved recently.",
+            "Explain how you debug issues in complex systems.",
+            "How do you ensure code quality and reliability?",
+            "Describe your approach to system design."
         ]
 
 def get_next_question():
-    """Get the next question, generating adaptively if needed"""
-    # If we need to generate questions for the first time
-    if not st.session_state.questions_generated and st.session_state.introduction_analyzed:
-        questions = generate_adaptive_questions()
-        if questions:
-            st.session_state.questions = questions
-            st.session_state.questions_generated = True
-            return questions[0] if questions else None
-    
-    # If we have questions in the list
-    if st.session_state.questions:
-        current_idx = st.session_state.current_question_index
-        if current_idx < len(st.session_state.questions):
-            return st.session_state.questions[current_idx]
-    
+    if not st.session_state.questions_generated:
+        return None
+
+    idx = st.session_state.current_question_index
+
+    if idx > 0 and (idx - 1) < len(st.session_state.questions):
+        return st.session_state.questions[idx - 1]
+
     return None
+
 
 def process_response(response_text):
     """Process the candidate's response and update interview state"""
-    
+
     if not response_text or response_text.strip() == "":
         st.warning("Please enter a response before submitting.")
         return
-    
-    # Special handling for tab switching termination
+
+    # --------------------------------------------------
+    # TAB SWITCH TERMINATION
+    # --------------------------------------------------
     if "session terminated due to tab switching" in response_text.lower():
         st.session_state.interview_terminated = True
         st.session_state.termination_reason = "misconduct"
         st.session_state.interview_active = False
-        
-        # Log termination
-        if "termination_log" not in st.session_state:
-            st.session_state.termination_log = []
+
+        st.session_state.termination_log = st.session_state.get("termination_log", [])
         st.session_state.termination_log.append({
             "time": datetime.now().strftime("%H:%M:%S"),
             "reason": "misconduct",
-            "response": "Tab switching detected multiple times"
+            "response": "Tab switching detected"
         })
-        
+
         st.rerun()
         return
 
-    # Update chat history
+    # --------------------------------------------------
+    # KEYWORD TERMINATION / ABUSIVE LANGUAGE CHECK
+    # --------------------------------------------------
+    should_terminate, reason = analyzer.check_for_termination(response_text)
+    if should_terminate:
+        st.session_state.interview_terminated = True
+        st.session_state.termination_reason = reason
+        st.session_state.interview_active = False
+        
+        st.session_state.termination_log = st.session_state.get("termination_log", [])
+        st.session_state.termination_log.append({
+            "time": datetime.now().strftime("%H:%M:%S"),
+            "reason": reason,
+            "response": response_text
+        })
+        
+        if reason == "misconduct":
+            st.error("Session terminated due to inappropriate language.")
+        elif reason == "candidate_request":
+            st.warning("Interview terminated by candidate request.")
+            
+        st.rerun()
+        return
+
+    # --------------------------------------------------
+    # SAVE CANDIDATE MESSAGE
+    # --------------------------------------------------
     st.session_state.messages.append({
         "role": "candidate",
         "content": response_text,
         "timestamp": datetime.now().strftime("%H:%M:%S")
     })
-    
-    # Check for termination
-    try:
-        should_terminate, reason = analyzer.check_for_termination(response_text)
-        if should_terminate:
-            st.session_state.interview_terminated = True
-            st.session_state.termination_reason = reason
-            st.session_state.interview_active = False
+
+    # --------------------------------------------------
+    # INTRODUCTION (Q1)
+    # --------------------------------------------------
+    if st.session_state.current_question_index == 0:
+        with st.spinner("Analyzing your introduction..."):
+            analysis = analyzer.analyze_introduction(response_text)
+
+        detected_skills = analysis.get("skills", [])
+
+        # 🔒 LOCK SKILL USING CONFIG
+        locked_skill = map_skills_to_category(detected_skills)
+
+        st.session_state.candidate_profile = {
+            "skills": detected_skills,
+            "experience_level": analysis.get("experience", "mid"),
+            "primary_skill": locked_skill,
+            "confidence": analysis.get("confidence", "medium"),
+            "communication": analysis.get("communication", "adequate"),
+            "intro_score": analysis.get("intro_score", 5),
+        }
+
+        # --------------------------------------------------
+        # 🔐 GENERATE QUESTIONS ONCE (TECHNICAL FIRST)
+        # --------------------------------------------------
+        if not st.session_state.get("questions_generated", False):
+
+            technical_questions = question_generator.generate_initial_skill_questions(
+                skill_category=locked_skill,
+                candidate_level=st.session_state.candidate_profile["experience_level"]
+            )
+
+            # Safety fallback
+            # Ensure we have enough technical questions
+            num_technical_needed = st.session_state.total_questions_to_ask - 1
             
-            # Log termination
-            if "termination_log" not in st.session_state:
-                st.session_state.termination_log = []
-            st.session_state.termination_log.append({
-                "time": datetime.now().strftime("%H:%M:%S"),
-                "reason": reason,
-                "response": response_text[:100] + "..." if len(response_text) > 100 else response_text
-            })
-            
-            st.rerun()
-            return
-    except Exception as e:
-        st.error(f"Error checking termination: {e}")
-    
-    # Analyze the response
-    try:
-        with st.spinner("Analyzing your response..."):
-            # For introduction (first response)
-            if st.session_state.current_question_index == 0:
-                analysis = analyzer.analyze_introduction(response_text)
+            if not technical_questions or len(technical_questions) < num_technical_needed:
+                print(f"⚠️ Generated {len(technical_questions) if technical_questions else 0} questions, need {num_technical_needed}. Adding fallbacks.")
+                fallbacks = [
+                    f"Explain a core concept in {locked_skill}.",
+                    f"Describe a real-world problem you solved using {locked_skill}.",
+                    f"What challenges do you face when working in {locked_skill}?",
+                    f"How do you handle performance optimization in {locked_skill}?",
+                    f"Describe a time you had to debug a complex {locked_skill} issue.",
+                    f"What are the key differences between versions of {locked_skill}?"
+                ]
                 
-                # Check if interview was terminated by AI analysis
-                if analysis.get("terminated", False):
-                    st.session_state.interview_terminated = True
-                    st.session_state.termination_reason = analysis.get("termination_reason", "unknown")
-                    st.session_state.interview_active = False
-                    st.rerun()
-                    return
-                
-                # Update candidate profile
-                st.session_state.candidate_profile.update({
-                    "skills": analysis.get("skills", []),
-                    "experience_level": analysis.get("experience", "mid"),
-                    "primary_skill": analysis.get("primary_skill", "backend"),
-                    "confidence": analysis.get("confidence", "medium"),
-                    "communication": analysis.get("communication", "adequate"),
-                    "intro_score": analysis.get("intro_score", 5)
-                })
-                
-                # Store introduction analysis
-                st.session_state.intro_analysis = analysis
-                st.session_state.introduction_analyzed = True
-                
-                # Move to next question
-                st.session_state.current_question_index += 1
-                
-                # Add system message
-                st.session_state.messages.append({
-                    "role": "system",
-                    "content": f"✅ Introduction analyzed. Generating adaptive questions...",
-                    "timestamp": datetime.now().strftime("%H:%M:%S")
-                })
-            
-            # For regular questions
-            else:
-                # Get the current question
-                current_question = get_next_question()
-                if not current_question and st.session_state.questions:
-                    # Fallback to stored questions
-                    question_idx = st.session_state.current_question_index - 1
-                    if question_idx < len(st.session_state.questions):
-                        current_question = st.session_state.questions[question_idx]
-                
-                if current_question:
-                    evaluation = analyzer.evaluate_answer(current_question, response_text)
+                if not technical_questions:
+                    technical_questions = []
                     
-                    # Store evaluation
-                    st.session_state.question_evaluations.append({
-                        "question": current_question,
-                        "answer": response_text,
-                        "evaluation": evaluation,
-                        "timestamp": datetime.now().strftime("%H:%M:%S")
-                    })
-                    
-                    # Update overall score
-                    current_score = st.session_state.get("overall_score", 0)
-                    num_questions = len(st.session_state.question_evaluations)
-                    new_overall = (current_score * (num_questions - 1) + evaluation.get("overall", 5)) / num_questions
-                    st.session_state.overall_score = new_overall
-                    
-                    # Move to next question or end interview
-                    if st.session_state.current_question_index < st.session_state.total_questions_to_ask:
-                        st.session_state.current_question_index += 1
-                        
-                        # Generate adaptive follow-up question if we're running out
-                        if len(st.session_state.questions) <= st.session_state.current_question_index:
-                            try:
-                                skill_category = st.session_state.candidate_profile.get("primary_skill", "backend")
-                                experience_level = st.session_state.candidate_profile.get("experience_level", "mid")
-                                
-                                # Generate adaptive follow-up
-                                last_response = st.session_state.question_evaluations[-1]
-                                followup_question = question_generator.generate_adaptive_followup(
-                                    previous_question=last_response["question"],
-                                    candidate_answer=last_response["answer"],
-                                    skill_category=skill_category,
-                                    difficulty_level=min(5, st.session_state.current_question_index + 1)
-                                )
-                                
-                                if followup_question and followup_question not in st.session_state.questions:
-                                    st.session_state.questions.append(followup_question)
-                            except Exception as e:
-                                st.warning(f"Could not generate adaptive follow-up: {e}")
-                    else:
-                        st.session_state.interview_completed = True
-                        st.session_state.interview_active = False
-                        
-                        # Calculate final scores
-                        if st.session_state.question_evaluations:
-                            scores = [e["evaluation"]["overall"] for e in st.session_state.question_evaluations]
-                            st.session_state.final_score = sum(scores) / len(scores)
-                        
-                        try:
-                            report_path = save_interview_report()
-                            if report_path:
-                                st.success("✅ Interview completed and report saved!")
-                            else:
-                                st.warning("⚠️ Interview completed but report not saved.")
-                        except Exception as e:
-                            st.error(f"❌ Error saving report: {e}")
-                    
-                    # MODIFIED: Remove score from feedback
-                    score = evaluation.get("overall", 5)
-                    feedback_icon = "✅" if score >= 7 else "⚠️" if score >= 5 else "❌"
-                    st.session_state.messages.append({
-                        "role": "system",
-                        "content": f"{feedback_icon} Answer received and analyzed.",
-                        "timestamp": datetime.now().strftime("%H:%M:%S")
-                    })
-                
-                else:
-                    # No question available
-                    st.error("No question available. Ending interview.")
-                    st.session_state.interview_completed = True
-                    st.session_state.interview_active = False
-    
-    except Exception as e:
-        st.error(f"Error analyzing response: {e}")
+                for q in fallbacks:
+                    if q not in technical_questions:
+                        technical_questions.append(q)
+                    if len(technical_questions) >= num_technical_needed:
+                        break
+
+            # Behavioral LAST
+            behavioral_question = question_generator.generate_behavioral_question_ai(
+                candidate_background=st.session_state.candidate_profile
+            )
+
+            st.session_state.questions = (
+                technical_questions[: st.session_state.total_questions_to_ask - 1]
+                + [behavioral_question]
+            )
+
+            st.session_state.questions_generated = True
+
+        st.session_state.introduction_analyzed = True
+        st.session_state.current_question_index = 1
+
         st.session_state.messages.append({
             "role": "system",
-            "content": f"❌ Error analyzing response. Please continue.",
+            "content": f"🔒 Skill locked: **{locked_skill.upper()}**. Interview questions fixed.",
             "timestamp": datetime.now().strftime("%H:%M:%S")
         })
-    
-    # Clear the current response for next question
+
+        st.session_state.current_response = ""
+        st.rerun()
+        return
+
+    # --------------------------------------------------
+    # TECHNICAL / BEHAVIORAL QUESTIONS
+    # --------------------------------------------------
+    current_idx = st.session_state.current_question_index - 1
+
+    if current_idx < len(st.session_state.questions):
+        current_question = st.session_state.questions[current_idx]
+    else:
+        st.error("No more questions available.")
+        st.session_state.interview_completed = True
+        st.session_state.interview_active = False
+        st.rerun()
+        return
+
+    evaluation = analyzer.evaluate_answer(current_question, response_text)
+
+    st.session_state.question_evaluations.append({
+        "question": current_question,
+        "answer": response_text,
+        "evaluation": evaluation,
+        "timestamp": datetime.now().strftime("%H:%M:%S")
+    })
+
+    # Update score
+    scores = [e["evaluation"]["overall"] for e in st.session_state.question_evaluations]
+    st.session_state.overall_score = sum(scores) / len(scores)
+
+    # Move forward or finish
+    if st.session_state.current_question_index < st.session_state.total_questions_to_ask:
+        st.session_state.current_question_index += 1
+    else:
+        st.session_state.interview_completed = True
+        st.session_state.interview_active = False
+        save_interview_report()
+
+    st.session_state.messages.append({
+        "role": "system",
+        "content": "✅ Answer recorded.",
+        "timestamp": datetime.now().strftime("%H:%M:%S")
+    })
+
     st.session_state.current_response = ""
-    
-    # Force rerun to update UI
     st.rerun()
 
 def show_interview_in_progress():
@@ -826,38 +815,174 @@ def show_interview_in_progress():
     
     # Question display
     if not st.session_state.get("introduction_analyzed", False):
-        current_prompt = "Please introduce yourself, including your experience, skills, and relevant projects."
+        st.markdown("### 📄 Upload Your Resume to Begin")
+        uploaded_file = st.file_uploader("Upload your resume (PDF or DOCX)", type=['pdf', 'docx', 'doc'])
+        
+        if uploaded_file is not None:
+            if st.button("Start Interview"):
+                with st.spinner("Analyzing your resume..."):
+                    # Parse resume
+                    resume_text = parse_resume(uploaded_file)
+                    
+                    if not resume_text.strip():
+                        st.error("Could not extract text from resume. Please try a different file.")
+                        return
+
+                    # Analyze resume as introduction
+                    analysis = analyzer.analyze_introduction(resume_text)
+
+                detected_skills = analysis.get("skills", [])
+
+                # 🔒 LOCK SKILL USING CONFIG
+                locked_skill = map_skills_to_category(detected_skills)
+
+                st.session_state.candidate_profile = {
+                    "skills": detected_skills,
+                    "experience_level": analysis.get("experience", "mid"),
+                    "primary_skill": locked_skill,
+                    "confidence": analysis.get("confidence", "medium"),
+                    "communication": analysis.get("communication", "adequate"),
+                    "intro_score": analysis.get("intro_score", 5),
+                }
+
+                # --------------------------------------------------
+                # 🔐 GENERATE QUESTIONS ONCE (TECHNICAL FIRST)
+                # --------------------------------------------------
+                if not st.session_state.get("questions_generated", False):
+                    technical_questions = question_generator.generate_initial_skill_questions(
+                        skill_category=locked_skill,
+                        candidate_level=st.session_state.candidate_profile["experience_level"]
+                    )
+
+                    # Safety fallback
+                    # Ensure we have enough technical questions
+                    num_technical_needed = st.session_state.total_questions_to_ask - 1
+
+                    if not technical_questions or len(technical_questions) < num_technical_needed:
+                        fallbacks = [
+                            f"Explain a core concept in {locked_skill}.",
+                            f"Describe a real-world problem you solved using {locked_skill}.",
+                            f"What challenges do you face when working in {locked_skill}?",
+                            f"How do you handle performance optimization in {locked_skill}?",
+                            f"Describe a time you had to debug a complex {locked_skill} issue.",
+                            f"What are the key differences between versions of {locked_skill}?"
+                        ]
+                        
+                        if not technical_questions:
+                            technical_questions = []
+                            
+                        for q in fallbacks:
+                            if q not in technical_questions:
+                                technical_questions.append(q)
+                            if len(technical_questions) >= num_technical_needed:
+                                break
+
+                    # Behavioral LAST
+                    behavioral_question = question_generator.generate_behavioral_question_ai(
+                        candidate_background=st.session_state.candidate_profile
+                    )
+
+                    st.session_state.questions = (
+                        technical_questions[: st.session_state.total_questions_to_ask - 1]
+                        + [behavioral_question]
+                    )
+
+                    st.session_state.questions_generated = True
+
+                st.session_state.introduction_analyzed = True
+                st.session_state.current_question_index = 1
+                
+                # Log system message
+                st.session_state.messages.append({
+                    "role": "system",
+                    "content": f"📄 Resume analyzed. Skills detected: {', '.join(detected_skills) if detected_skills else 'None'}. Locking interview to: **{locked_skill.upper()}**.",
+                    "timestamp": datetime.now().strftime("%H:%M:%S")
+                })
+
+                st.rerun()
+
     else:
         current_question = get_next_question()
         if current_question:
             current_prompt = current_question
         else:
-            current_prompt = "All questions completed. Thank you!"
-    
-    st.info(f"**Current Question:** {current_prompt}")
-    
-    # Response input
-    response = st.text_area(
-        "Your Response:",
-        value=st.session_state.get("current_response", ""),
-        key=f"response_input_{st.session_state.current_question_index}",
-        height=180,
-        placeholder="Type your detailed response here...",
-        help="Provide a comprehensive answer with examples where possible"
-    )
-    
-    # Update session state with current response
-    st.session_state.current_response = response
-    
-    # Submit button
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        if st.button("📤 Submit Response", type="primary", use_container_width=True, key=f"submit_response_{st.session_state.current_question_index}"):
-            if response and response.strip():
-                # Process the response
-                process_response(response.strip())
+            current_prompt = None # Handle completion separately
+            
+        # Display Current Question
+        if current_prompt:
+            st.markdown(f"""
+            <div style="
+                background: rgba(30, 41, 59, 0.7);
+                border-left: 5px solid #6366f1;
+                padding: 20px;
+                border-radius: 5px;
+                margin-bottom: 20px;
+                font-size: 1.1em;
+                font-weight: 500;
+            ">
+                {current_prompt}
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.success("🎉 All questions completed! Please click 'End Interview' in the sidebar.")
+        
+        # Response input
+        response = st.text_area(
+            "Your Response:",
+            value=st.session_state.get("current_response", ""),
+            key=f"response_input_{st.session_state.current_question_index}",
+            height=180,
+            placeholder="Type your detailed response here...",
+            help="Provide a comprehensive answer with examples where possible"
+        )
+        # 🔒 DISPLAY LOCKED SKILL AFTER INTRO QUESTION
+        if st.session_state.introduction_analyzed and st.session_state.candidate_profile:
+            locked_skill = st.session_state.candidate_profile.get("primary_skill", "").upper()
+            detected_skills = st.session_state.candidate_profile.get("skills", [])
+
+            st.markdown(
+                f"""
+                <div style="
+                    margin-top: 10px;
+                    padding: 12px 16px;
+                    border-radius: 12px;
+                    background: linear-gradient(135deg, rgba(16,185,129,0.15), rgba(5,150,105,0.1));
+                    border-left: 4px solid #10b981;
+                    color: #d1fae5;
+                    font-size: 0.95rem;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                ">
+                    <span>🔒 <strong>Skill Locked:</strong> {locked_skill}</span>
+                    <span style="color:#a7f3d0; font-size: 0.85rem;">
+                        Detected Keys: {", ".join(detected_skills[:5])}
+                    </span>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+        
+        # Update session state with current response
+        st.session_state.current_response = response
+        
+        # Submit button
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            if current_prompt:
+                if st.button("📤 Submit Response", type="primary", use_container_width=True, key=f"submit_response_{st.session_state.current_question_index}"):
+                    if response and response.strip():
+                        # Process the response
+                        process_response(response.strip())
+                    else:
+                        st.warning("Please enter a response before submitting.")
             else:
-                st.warning("Please enter a response before submitting.")
+                # End Interview Button when completed
+                if st.button("🏁 End Interview", type="primary", use_container_width=True, key="end_interview_main"):
+                    st.session_state.interview_completed = True
+                st.session_state.interview_active = False
+                st.rerun()
     
     # Display progress
     st.markdown("---")
@@ -865,10 +990,22 @@ def show_interview_in_progress():
     
     # Display adaptive questions info if available
     if st.session_state.introduction_analyzed and st.session_state.questions:
-        with st.expander("📋 Interview Questions", expanded=False):
-            for i, question in enumerate(st.session_state.questions):
-                status = "✅" if i < st.session_state.current_question_index - 1 else "⏳" if i == st.session_state.current_question_index - 1 else "🔲"
-                st.markdown(f"{status} **Q{i+1}:** {question}")
+        for i, question in enumerate(st.session_state.questions):
+            # Q1 is actually index 0 in the list but displayed as Q1
+            # "Introduction" was step 0 (before this list existed)
+            
+            # Logic: 
+            # If current_question_index is 1, we are on the first technical question (idx 0 of questions list)
+            
+            display_idx = i + 1 
+            is_past = display_idx < st.session_state.current_question_index 
+            is_current = display_idx == st.session_state.current_question_index
+            
+            if is_past:
+                pass # Hide past questions as requested
+            elif is_current and not st.session_state.interview_completed:
+                st.markdown(f"⏳ **Q{display_idx}:** (Current Question)")
+            # else: Future questions are NOT displayed
     
     # Display chat history
     st.markdown("### 💬 Conversation History")
@@ -980,279 +1117,117 @@ def show_termination_screen():
     
     st.markdown("---")
 
-def show_report():
-    """Display interview completion screen"""
-    
-    # Save report if not already saved
-    if not st.session_state.get('report_saved', False):
-        try:
-            report_path = save_interview_report()
-            st.session_state.report_saved = True
-        except Exception as e:
-            st.error(f"Error saving report: {e}")
-    
-    st.markdown("""
-    <div class='main-header' style='background: linear-gradient(135deg, #00695c 0%, #004d40 100%);'>
-        <h1>Interview Completed Successfully!</h1>
-        <p>Thank you for participating</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Success message
-    st.markdown("""
-    <div class='custom-success'>
-        <h3 style='color: #4CAF50; margin-top: 0;'>✅ Interview Submitted</h3>
-        <p style='font-size: 1.1rem;'>
-            Your interview responses have been successfully submitted and analyzed.
-            The AI-powered adaptive questions provided a personalized assessment of your skills.
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # What happens next
-    st.markdown("### What happens next:")
-    
-    next_steps = [
-        ("📄 Response Analysis", "Your answers are being processed by our AI system"),
-        ("🤖  AI Evaluation", " Adaptive question performance analyzed for skill assessment"),
-        ("👥 HR Review", "The HR team will review your interview results"),
-        ("📧 Contact", "You will be contacted regarding next steps within 3-5 business days")
-    ]
-    
-    for step, description in next_steps:
-        st.markdown(f"""
-        <div style='background: #1e1e2e; padding: 1rem; border-radius: 8px; margin: 0.5rem 0; border-left: 4px solid #2196F3;'>
-            <div style='display: flex; align-items: center; gap: 12px;'>
-                <span style='font-size: 1.5rem;'>{step.split()[0]}</span>
-                <div>
-                    <strong style='color: #E2E8F0; font-size: 1.1rem;'>{' '.join(step.split()[1:])}</strong><br>
-                    <span style='color: #CBD5E0;'>{description}</span>
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # Simple stats
-    st.markdown("### Summary")
-    st.metric("Questions Answered", len(st.session_state.question_evaluations))
-    st.markdown("---")
-
 def save_interview_report():
-    """Save interview report using ReportManager"""
+    """Save the interview report using ReportManager"""
     try:
-        # VALIDATION: Check if we have enough data to save
-        if (len(st.session_state.question_evaluations) == 0 or 
-            not st.session_state.candidate_profile or
-            st.session_state.overall_score == 0):
-            
-            print(f"⚠️ Insufficient data for report:")
-            print(f"   - Questions answered: {len(st.session_state.question_evaluations)}")
-            print(f"   - Candidate profile exists: {bool(st.session_state.candidate_profile)}")
-            print(f"   - Overall score: {st.session_state.overall_score}")
-            return None
-        
-        # Ensure directory exists
-        os.makedirs("interview_reports", exist_ok=True)
-        
-        # Generate timestamp
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        json_filename = f"interview_reports/candidate_report_{timestamp}.json"
-        txt_filename = f"interview_reports/candidate_report_{timestamp}.txt"
-        
-        # Prepare report data WITH ALL REQUIRED FIELDS
-        report_data = {
-            "report_id": f"INT{timestamp}",
-            "timestamp": datetime.now().isoformat(),
-            "display_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "candidate_profile": st.session_state.candidate_profile,
-            "question_evaluations": st.session_state.question_evaluations,
-            "questions_asked": st.session_state.questions[:len(st.session_state.question_evaluations)],
-            "overall_score": st.session_state.overall_score,
-            "final_score": st.session_state.final_score,
-            "introduction_analyzed": st.session_state.introduction_analyzed,
-            "total_questions_answered": len(st.session_state.question_evaluations),
-            "total_questions": st.session_state.total_questions_to_ask,
-            "messages": st.session_state.messages[:5] if st.session_state.messages else [],
-            "adaptive_interview": True,
-            # Add tab switching info if applicable
-            "tab_switch_count": st.session_state.get('tab_switch_count', 0),
-            "terminated_by_tab_switch": st.session_state.get('auto_terminate_tab_switch', False)
-        }
-        
-        # DEBUG: Print what we're saving
-        print(f"📊 Saving report with data:")
-        print(f"   - Report ID: {report_data['report_id']}")
-        print(f"   - Questions: {len(report_data['question_evaluations'])}")
-        print(f"   - Score: {report_data['overall_score']}")
-        print(f"   - JSON file: {json_filename}")
-        
-        # Save JSON report
-        with open(json_filename, 'w', encoding='utf-8') as f:
-            json.dump(report_data, f, indent=2, ensure_ascii=False)
-        
-        # Verify file was written
-        if os.path.exists(json_filename) and os.path.getsize(json_filename) > 0:
-            print(f"✅ JSON report saved successfully: {os.path.getsize(json_filename)} bytes")
-        else:
-            print(f"❌ JSON file creation failed: {json_filename}")
-            return None
-        
-        # Save text report
-        try:
-            text_report = generate_readable_report(report_data)
-            with open(txt_filename, 'w', encoding='utf-8') as f:
-                f.write(text_report)
-            
-            if os.path.exists(txt_filename) and os.path.getsize(txt_filename) > 0:
-                print(f"✅ Text report saved successfully: {os.path.getsize(txt_filename)} bytes")
-            else:
-                print(f"⚠️ Text file creation had issues: {txt_filename}")
-                
-        except Exception as text_error:
-            print(f"⚠️ Text report error (continuing with JSON): {text_error}")
-        
-        return json_filename
-        
+        report_path = report_manager.save_interview_report(st.session_state)
+        st.session_state.report_path = report_path
     except Exception as e:
-        print(f"❌ Error saving report: {e}")
-        import traceback
-        traceback.print_exc()
-        return None
+        st.error(f"Error saving report: {str(e)}")
+
+def show_report():
+    """Display the interview completion screen"""
     
-def generate_readable_report(report_data: dict) -> str:
-    """Generate a human-readable text report from report data"""
-    report = "=" * 60 + "\n"
-    report += "VIRTUAL HR INTERVIEWER - CANDIDATE REPORT\n"
-    report += "=" * 60 + "\n\n"
-    
-    # Basic info with safe access
-    report += f"Report Generated: {report_data.get('timestamp', 'N/A')}\n"
-    report += f"Interview Type: {'AI Adaptive' if report_data.get('adaptive_interview', False) else 'Standard'}\n"
-    
-    # Use get() with default values
-    total_questions = report_data.get('total_questions_answered', 
-                                    len(report_data.get('question_evaluations', [])))
-    report += f"Total Questions Answered: {total_questions}\n"
-    
-    report += f"Overall Score: {report_data.get('overall_score', 0):.2f}/10\n"
-    report += f"Final Score: {report_data.get('final_score', 0):.2f}/10\n\n"
-    
-    # Candidate Profile with safe access
-    profile = report_data.get('candidate_profile', {})
-    report += "CANDIDATE PROFILE\n"
-    report += "-" * 40 + "\n"
-    report += f"Experience Level: {profile.get('experience_level', 'N/A')}\n"
-    report += f"Primary Skill: {profile.get('primary_skill', 'N/A')}\n"
-    report += f"Confidence: {profile.get('confidence', 'N/A')}\n"
-    report += f"Communication: {profile.get('communication', 'N/A')}\n"
-    report += f"Introduction Score: {profile.get('intro_score', 'N/A')}/10\n"
-    
-    skills = profile.get("skills", [])
-    if skills:
-        report += f"Skills Detected: {', '.join(skills)}\n"
-    report += "\n"
-    
-    # Question-by-Question Analysis
-    report += "QUESTION ANALYSIS\n"
-    report += "-" * 40 + "\n"
-    
-    evaluations = report_data.get('question_evaluations', [])
-    questions_asked = report_data.get('questions_asked', [])
-    
-    for i, eval_data in enumerate(evaluations):
-        evaluation = eval_data.get('evaluation', {})
-        score = evaluation.get("overall", 0)
+    # Ensure report is saved once
+    if not st.session_state.get('report_saved', False):
+        save_interview_report()
+        st.session_state.report_saved = True
         
-        # Get the actual question asked
-        question = eval_data.get('question', 'N/A')
-        if i < len(questions_asked):
-            question = questions_asked[i]
-        
-        report += f"\nQuestion {i+1}: {question}\n"
-        report += f"Score: {score}/10\n"
-        
-        # Category scores with safe access
-        categories = [
-            ("Technical Accuracy", "technical_accuracy"),
-            ("Completeness", "completeness"),
-            ("Clarity", "clarity"),
-            ("Depth", "depth"),
-            ("Practicality", "practicality")
-        ]
-        
-        for label, key in categories:
-            cat_score = evaluation.get(key, 0)
-            report += f"  {label}: {cat_score}/10\n"
-        
-        if evaluation.get("strengths"):
-            report += "  Strengths:\n"
-            for strength in evaluation["strengths"]:
-                report += f"    - {strength}\n"
-        
-        if evaluation.get("weaknesses"):
-            report += "  Areas for Improvement:\n"
-            for weakness in evaluation["weaknesses"]:
-                report += f"    - {weakness}\n"
-        
-        report += "-" * 40 + "\n"
+    st.markdown("""
+    <div class='main-header'>
+        <h1>Interview Completed</h1>
+        <p>Thank you for completing the technical interview.</p>
+    </div>
+    """, unsafe_allow_html=True)
     
-    # Summary Statistics
-    report += "\nSUMMARY STATISTICS\n"
-    report += "-" * 40 + "\n"
+    st.success("✅ Your responses have been recorded and analyzed.")
     
-    scores = [e.get("evaluation", {}).get("overall", 0) for e in evaluations]
-    if scores:
-        avg_score = sum(scores) / len(scores)
-        max_score = max(scores)
-        min_score = min(scores)
+    # Display Score
+    score = st.session_state.get('overall_score', 0)
+
+    st.info("ℹ️ A detailed report has been generated and sent to the hiring team. You may close this window.")
+    
+    if st.session_state.get('report_path'):
+        st.caption(f"Report ID: {os.path.basename(st.session_state.report_path).replace('.json', '')}")
+
+
+def check_and_process_termination():
+    """Centralized logic to handle termination signals"""
+    # 1. Check URL parameters first (Signal from JS)
+    query_params = st.query_params
+    print(f"🔍 DEBUG: query_params: {query_params}")
+    
+    # Helper to clean param value (handle list vs string)
+    def get_param(key):
+        if key not in query_params:
+            return None
+        val = query_params[key]
+        if isinstance(val, list):
+            return val[0]
+        return val
+
+    terminate_tab = get_param('terminate_tab')
+    
+    if terminate_tab == 'true':
+        print("🛑 DEBUG: URL terminate_tab detected!")
+        st.session_state.auto_terminate_tab_switch = True
+        st.session_state.interview_terminated = True
+        st.session_state.termination_reason = "misconduct"
+        st.session_state.interview_active = False
         
-        report += f"Average Score: {avg_score:.2f}/10\n"
-        report += f"Highest Score: {max_score}/10\n"
-        report += f"Lowest Score: {min_score}/10\n"
-        report += f"Score Range: {max_score - min_score:.2f}\n"
-    
-    # Recommendation
-    report += "\nRECOMMENDATION\n"
-    report += "-" * 40 + "\n"
-    
-    overall = report_data.get('overall_score', 0)
-    if overall >= 7:
-        report += "✅ STRONGLY RECOMMEND - Proceed to Next Round\n"
-        report += "Candidate demonstrates strong technical understanding and communication skills.\n"
-    elif overall >= 5:
-        report += "⚠️ CONDITIONAL RECOMMEND - Consider with Feedback\n"
-        report += "Candidate shows potential but needs improvement in some areas.\n"
-    else:
-        report += "❌ NOT RECOMMENDED - Requires Significant Improvement\n"
-        report += "Candidate needs to strengthen technical fundamentals and communication.\n"
-    
-    report += "\n" + "=" * 60 + "\n"
-    report += "END OF REPORT\n"
-    report += "=" * 60
-    
-    return report
+        tab_count_val = get_param('tab_count')
+        if tab_count_val:
+            try:
+                st.session_state.tab_switch_count = int(tab_count_val)
+            except:
+                pass
+                
+        # Clear params and return True to signal termination handling
+        st.query_params.clear()
+        return True
+
+    # 2. Check Session State flags
+    print(f"🔍 DEBUG: State Check - auto_term: {st.session_state.get('auto_terminate_tab_switch')}, switch_count: {st.session_state.get('tab_switch_count')}")
+    if st.session_state.get('auto_terminate_tab_switch', False) or \
+       (st.session_state.get('tab_switch_count', 0) >= 2 and st.session_state.interview_active):
+       
+        print("🛑 DEBUG: State termination flag detected!")
+        # Update values if needed
+        st.session_state.interview_terminated = True
+        st.session_state.termination_reason = "misconduct"
+        st.session_state.interview_active = False
+        st.session_state.auto_terminate_tab_switch = True
+        return False # No reload needed for state check, just proceed to show termination screen
+        
+    return False
 
 def main():
     """Main application function"""
     
     # ===== IMMEDIATE TAB SWITCHING TERMINATION CHECK =====
     # This MUST be at the VERY BEGINNING
-    if st.session_state.get('auto_terminate_tab_switch', False) and st.session_state.interview_active:
-        st.session_state.interview_terminated = True
-        st.session_state.termination_reason = "misconduct"
-        st.session_state.interview_active = False
-        
-        # Add to termination log
+    should_rerun = check_and_process_termination()
+    print(f"🔍 DEBUG: main() - should_rerun: {should_rerun}, terminated: {st.session_state.get('interview_terminated')}")
+    
+    if st.session_state.get('interview_terminated', False):
+        print("💀 DEBUG: Rendering termination screen...")
+        # Add log if needed
         if "termination_log" not in st.session_state:
             st.session_state.termination_log = []
-        st.session_state.termination_log.append({
-            "time": datetime.now().strftime("%H:%M:%S"),
-            "reason": "misconduct",
-            "details": f"Tab switching detected ({st.session_state.get('tab_switch_count', 0)} times)"
-        })
-        
-        st.rerun()
-        return  # Stop execution - termination screen will show
+            
+        already_logged = any(log.get('reason') == 'misconduct' for log in st.session_state.termination_log)
+        if not already_logged:
+            st.session_state.termination_log.append({
+                "time": datetime.now().strftime("%H:%M:%S"),
+                "reason": "misconduct",
+                "details": f"Tab switching detected ({st.session_state.get('tab_switch_count', 0)} times)"
+            })
+            
+        if should_rerun:
+            st.rerun()
+            
+        show_termination_screen()
+        return
     
     # ===== TAB SWITCH DETECTION JAVASCRIPT =====
     if st.session_state.interview_active and not st.session_state.interview_terminated:
@@ -1273,23 +1248,35 @@ def main():
                     alert('⚠️ WARNING: Tab switching detected. Next switch will terminate the interview immediately!');
                     
                     // Update URL to communicate with Streamlit
-                    const url = new URL(window.location);
-                    url.searchParams.set('tab_warning', 'true');
-                    url.searchParams.set('tab_count', tabCount);
-                    window.history.replaceState({{}}, '', url);
-                    
-                    // Force page reload to update session state
-                    setTimeout(() => window.location.reload(), 500);
+                    try {{
+                        const targetWindow = window.parent || window;
+                        const url = new URL(targetWindow.location);
+                        url.searchParams.set('tab_warning', 'true');
+                        url.searchParams.set('tab_count', tabCount);
+                        targetWindow.history.replaceState({{}}, '', url);
+                        
+                        // Force page reload to update session state
+                        setTimeout(() => targetWindow.location.reload(), 500);
+                    }} catch(e) {{
+                        console.error('Error updating parent URL:', e);
+                        // Fallback attempt
+                        window.location.reload();
+                    }}
                     
                 }} else if (tabCount >= 2) {{
                     // SECOND SWITCH - TERMINATE IMMEDIATELY
                     alert('❌ INTERVIEW TERMINATED: Multiple tab switches detected. This violates interview rules.');
                     
                     // Set termination flag in URL
-                    const url = new URL(window.location);
-                    url.searchParams.set('terminate_tab', 'true');
-                    url.searchParams.set('tab_count', tabCount);
-                    window.history.replaceState({{}}, '', url);
+                    try {{
+                        const targetWindow = window.parent || window;
+                        const url = new URL(targetWindow.location);
+                        url.searchParams.set('terminate_tab', 'true');
+                        url.searchParams.set('tab_count', tabCount);
+                        targetWindow.history.replaceState({{}}, '', url);
+                    }} catch(e) {{
+                        console.error('Error updating parent URL:', e);
+                    }}
                     
                     // Auto-fill termination message
                     setTimeout(() => {{
@@ -1317,7 +1304,13 @@ def main():
                     }}, 300);
                     
                     // Force immediate reload
-                    setTimeout(() => window.location.reload(), 1000);
+                    setTimeout(() => {{
+                        try {{
+                            (window.parent || window).location.reload();
+                        }} catch(e) {{
+                            window.location.reload();
+                        }}
+                    }}, 1000);
                 }}
             }}
         }});
@@ -1343,43 +1336,32 @@ def main():
         
         st.components.v1.html(js_code, height=0)
     
-    # ===== CHECK URL PARAMETERS =====
+    # ===== CHECK URL PARAMETERS (WARNINGS ONLY) =====
+    # Termination is handled by check_and_process_termination at top
     query_params = st.query_params
     
     # Check for tab warning
-    if 'tab_warning' in query_params and query_params['tab_warning'][0] == 'true':
+    tab_warning = query_params.get('tab_warning')
+    if isinstance(tab_warning, list):
+        tab_warning = tab_warning[0]
+        
+    if tab_warning == 'true':
         st.session_state.tab_warning_given = True
-        if 'tab_count' in query_params:
-            st.session_state.tab_switch_count = int(query_params['tab_count'][0])
+        
+        tab_count_val = query_params.get('tab_count')
+        if isinstance(tab_count_val, list):
+            tab_count_val = tab_count_val[0]
+            
+        if tab_count_val:
+            try:
+                st.session_state.tab_switch_count = int(tab_count_val)
+            except:
+                pass
         
         # Clear URL parameters
         st.query_params.clear()
         st.rerun()
-    
-    # Check for termination due to tab switching
-    if 'terminate_tab' in query_params and query_params['terminate_tab'][0] == 'true':
-        st.session_state.auto_terminate_tab_switch = True
-        if 'tab_count' in query_params:
-            st.session_state.tab_switch_count = int(query_params['tab_count'][0])
-        
-        # Clear URL parameters
-        st.query_params.clear()
-        st.rerun()
-    
-    # ===== DIRECT TERMINATION CHECK =====
-    if st.session_state.get('tab_switch_count', 0) >= 2 and st.session_state.interview_active:
-        st.session_state.interview_terminated = True
-        st.session_state.termination_reason = "misconduct"
-        st.session_state.interview_active = False
-        st.session_state.auto_terminate_tab_switch = True
-        
-        st.rerun()
-    
-    # ===== SHOW WARNING IF APPLICABLE =====
-    if st.session_state.tab_switch_count == 1 and not st.session_state.tab_warning_given:
-        st.session_state.tab_warning_given = True
-        st.error("⚠️ **WARNING:** Tab switching detected. Next switch will terminate the interview immediately!")
-    
+
     # ===== HEADER =====
     st.markdown("""
     <div class='main-header'>
@@ -1400,7 +1382,7 @@ def main():
             
             st.markdown("**Progress**")
             st.progress(progress)
-            st.caption(f"Question {st.session_state.current_question_index}/{total_questions}")
+            # st.caption(f"Question {st.session_state.current_question_index}/{total_questions}")
             
             # Quick actions
             st.markdown("---")
@@ -1415,8 +1397,8 @@ def main():
             st.markdown("### ✅ Interview Complete")
             st.markdown("Your interview has been successfully submitted.")
             st.markdown("---")
-            if st.session_state.overall_score > 0:
-                st.metric("Overall Score", f"{st.session_state.overall_score:.1f}/10")
+            # if st.session_state.overall_score > 0:
+            #     st.metric("Overall Score", f"{st.session_state.overall_score:.1f}/10")
         
         # About section
         st.markdown("---")

@@ -1,15 +1,14 @@
 import openai
 import re
 from typing import Dict, List, Tuple
-from config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL
+from config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL, MODEL_NAME, SKILL_CATEGORIES
 from utils import extract_skills, analyze_response_quality
+from skill_mapper import map_skills_to_category
 
 class ResponseAnalyzer:
     def __init__(self):
         openai.api_key = OPENROUTER_API_KEY
         openai.api_base = OPENROUTER_BASE_URL
-
-    # Add this method to the ResponseAnalyzer class
 
     def _fallback_analysis(self, response: str) -> Dict:
         """Fallback analysis when AI analysis fails"""
@@ -18,35 +17,19 @@ class ResponseAnalyzer:
         skills = extract_skills(response)
         
         # Simple skill categorization
-        skill_counts = {
-            "frontend": 0,
-            "backend": 0,
-            "fullstack": 0,
-            "devops": 0,
-            "data": 0,
-            "mobile": 0
-        }
-        
-        backend_keywords = ["python", "java", "node", "sql", "api", "microservices", "server", "backend", "spring", "django", "flask"]
-        frontend_keywords = ["javascript", "react", "angular", "vue", "html", "css", "frontend", "typescript", "redux", "webpack"]
-        devops_keywords = ["aws", "docker", "kubernetes", "ci/cd", "terraform", "linux", "azure", "gcp", "jenkins", "ansible"]
-        data_keywords = ["machine learning", "data analysis", "pytorch", "tensorflow", "ml", "ai", "data science", "pandas", "numpy", "scikit"]
+        skill_counts = {cat: 0 for cat in SKILL_CATEGORIES}
         
         for skill in skills:
-            skill_lower = skill.lower()
-            if any(keyword in skill_lower for keyword in backend_keywords):
-                skill_counts["backend"] += 0
-            if any(keyword in skill_lower for keyword in frontend_keywords):
-                skill_counts["frontend"] += 1
-            if any(keyword in skill_lower for keyword in devops_keywords):
-                skill_counts["devops"] += 1
-            if any(keyword in skill_lower for keyword in data_keywords):
-                skill_counts["data"] += 1
+            s = skill.lower()
+            for cat, keywords in SKILL_CATEGORIES.items():
+                for k in keywords:
+                    if k.lower() in s:
+                        skill_counts[cat] += 1
         
         # Determine primary skill
-        primary_skill = max(skill_counts, key=skill_counts.get) # type: ignore
-        if skill_counts[primary_skill] == 0:
-            primary_skill = "frontend"  # Default
+        primary_skill = max(skill_counts, key=skill_counts.get) if skill_counts else "backend"
+        if skill_counts.get(primary_skill, 0) == 0:
+            primary_skill = "backend"
         
         # Estimate experience level based on word count and content
         word_count = len(response.split())
@@ -93,46 +76,89 @@ class ResponseAnalyzer:
             "word_count": word_count,
             "intro_score": min(10, max(1, intro_score))  # Keep between 1-10
         }
-        
-    def analyze_introduction(self, response: str) -> Dict: # type: ignore
-        """Analyze candidate's introduction with better AI analysis"""
-        prompt = f"""
-        Analyze this candidate introduction comprehensively:
-        
-        Response: {response}
-        
-        Provide analysis in this exact format:
-        Skills: [comma separated list]
-        Experience: [junior/mid/senior]
-        Primary Skill: [backend/frontend/fullstack/devops/data/mobile]
-        Confidence: [low/medium/high]
-        Communication: [weak/adequate/strong]
-        Projects Mentioned: [number]
-        
-        Evaluate based on:
-        1. Clarity of career narrative
-        2. Technical skills demonstrated
-        3. Project experience details
-        4. Achievements mentioned
-        5. Professional communication
+
+
+    def analyze_introduction(self, response: str) -> Dict:  # type: ignore
         """
-        
+        Analyze candidate introduction using AI + config-driven skill detection
+        """
+
+        prompt = f"""
+        Analyze this candidate introduction:
+
+        Response:
+        {response}
+
+        Extract:
+        - Skills mentioned
+        - Experience level (junior/mid/senior)
+        - Confidence (low/medium/high)
+        - Communication (weak/adequate/strong)
+        """
+
+        ai_analysis = {}
+
+        # --------------------------------------------------
+        # 1️⃣ AI ANALYSIS (SOFT SIGNALS)
+        # --------------------------------------------------
         try:
-            response_analysis = openai.ChatCompletion.create(
-                model="xiaomi/mimo-v2-flash:free",
+            res = openai.ChatCompletion.create(
+                model=MODEL_NAME,
                 messages=[
-                    {"role": "system", "content": "You are a technical recruiter analyzing candidate responses. Be thorough."},
+                    {"role": "system", "content": "You are a technical recruiter."},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.3,
-                max_tokens=200
+                max_tokens=150
             )
-            
-            analysis_text = response_analysis.choices[0].message.content # type: ignore
-            return self._parse_intro_analysis(analysis_text, response)
+
+            ai_text = res.choices[0].message.content.lower()
+
+            ai_analysis = {
+                "experience": "senior" if "senior" in ai_text else
+                              "junior" if "junior" in ai_text else "mid",
+                "confidence": "high" if "confident" in ai_text else "medium",
+                "communication": "strong" if "clear" in ai_text else "adequate"
+            }
+
         except Exception as e:
-            print(f"AI analysis error: {e}")
-            return self._fallback_analysis(response)
+            print("AI intro analysis failed:", e)
+            ai_analysis = {
+                "experience": "mid",
+                "confidence": "medium",
+                "communication": "adequate"
+            }
+
+        # --------------------------------------------------
+        # 2️⃣ CONFIG-DRIVEN SKILL EXTRACTION (SOURCE OF TRUTH)
+        # --------------------------------------------------
+        response_lower = response.lower()
+        detected_skills = []
+
+        for category, keywords in SKILL_CATEGORIES.items():
+            for keyword in keywords:
+                if keyword.lower() in response_lower:
+                    detected_skills.append(keyword)
+
+        detected_skills = list(set(detected_skills))
+
+        # --------------------------------------------------
+        # 3️⃣ DOMAIN LOCKING (NO AI GUESSING)
+        # --------------------------------------------------
+        primary_skill = map_skills_to_category(detected_skills)
+
+        # --------------------------------------------------
+        # 4️⃣ FINAL STRUCTURED OUTPUT
+        # --------------------------------------------------
+        return {
+            "skills": detected_skills,
+            "experience": ai_analysis["experience"],
+            "primary_skill": primary_skill,
+            "confidence": ai_analysis["confidence"],
+            "communication": ai_analysis["communication"],
+            "intro_score": 7 if detected_skills else 5
+        }
+
 
     def _parse_intro_analysis(self, analysis_text: str, original_response: str) -> Dict:
         """Parse introduction analysis with detailed metrics"""
@@ -232,16 +258,27 @@ class ResponseAnalyzer:
         return result
     
     def _extract_skill_from_text(self, text: str) -> str:
-        """Extract skill category from text"""
+        """Extract skill category from text using config first"""
         text_lower = text.lower()
         
+        # Use config-driven mapping first (Source of Truth)
+        try:
+            from config import SKILL_CATEGORIES
+            for category, keywords in SKILL_CATEGORIES.items():
+                for keyword in keywords:
+                    if keyword.lower() in text_lower:
+                        return category
+        except ImportError:
+            pass # Fallback to hardcoded if import fails
+            
         skill_mapping = {
             "backend": ["backend", "back-end", "server", "api", "database", "python", "java", "node", "spring"],
             "frontend": ["frontend", "front-end", "react", "angular", "vue", "javascript", "ui", "ux"],
             "fullstack": ["fullstack", "full-stack", "full stack"],
             "devops": ["devops", "dev-ops", "aws", "docker", "kubernetes", "ci/cd", "infrastructure"],
             "data": ["data", "machine learning", "ml", "ai", "analytics", "data science"],
-            "mobile": ["mobile", "ios", "android", "react native", "flutter"]
+            "mobile": ["mobile", "ios", "android", "react native", "flutter"],
+            "aec_bim": ["aec", "bim", "tekla", "autocad", "revit", "structure", "civil"]
         }
         
         for skill, keywords in skill_mapping.items():
@@ -412,7 +449,8 @@ class ResponseAnalyzer:
             "frontend": ["react", "angular", "vue", "javascript", "typescript", "html", "css", "ui", "frontend", "webpack"],
             "devops": ["aws", "docker", "kubernetes", "terraform", "ci/cd", "devops", "infrastructure", "jenkins", "ansible"],
             "data": ["machine learning", "data science", "ai", "ml", "tensorflow", "pytorch", "analytics", "pandas", "numpy"],
-            "mobile": ["android", "ios", "mobile", "react native", "flutter", "swift", "kotlin", "xcode"]
+            "mobile": ["android", "ios", "mobile", "react native", "flutter", "swift", "kotlin", "xcode"],
+            "aec_bim": ["aec", "bim", "tekla", "autocad", "revit", "civil", "structure", "engineering"]
         }
         
         skill_scores = {skill: 0 for skill in skill_indicators.keys()}
@@ -536,7 +574,7 @@ class ResponseAnalyzer:
         
         try:
             evaluation = openai.ChatCompletion.create(
-                model="xiaomi/mimo-v2-flash:free",
+                model=MODEL_NAME,
                 messages=[
                     {"role": "system", "content": "You are a technical interviewer evaluating answers. Be fair but critical."},
                     {"role": "user", "content": prompt}
@@ -731,8 +769,10 @@ class ResponseAnalyzer:
                 return True, "misconduct"
         
         # Check for explicit termination request
-        if response_lower in TERMINATION_KEYWORDS:
-            return True, "candidate_request"
+        # Use regex to match whole words only to avoid false positives (e.g., "backend" matching "end")
+        for keyword in TERMINATION_KEYWORDS:
+            if re.search(r'\b' + re.escape(keyword) + r'\b', response_lower):
+                return True, "candidate_request"
         
         # Check for extremely poor responses
         if len(response.split()) < 5 and "skip" not in response_lower:
@@ -775,7 +815,7 @@ class ResponseAnalyzer:
         try:
             print("[DEBUG] Sending to AI for analysis...")
             response_analysis = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo",
+                model=MODEL_NAME,
                 messages=[
                     {"role": "system", "content": '''
                             You are a technical recruiter evaluating candidate responses during an interview. Analyze each answer carefully and provide specific, detailed, and objective feedback based strictly on the content provided.

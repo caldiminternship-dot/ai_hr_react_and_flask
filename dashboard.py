@@ -8,338 +8,131 @@ from plotly.subplots import make_subplots
 from datetime import datetime
 import numpy as np
 
+from models import SessionLocal
+from auth import login_user
+from config import HR_EMAILS
+
 st.set_page_config(
     page_title="HR Interview Dashboard",
     layout="wide",
     page_icon="📊"
 )
 
-# Light Theme CSS
+# Enterprise Light Theme CSS (HR Portal)
 css = """
 <style>
-    /* ===== LIGHT THEME BASE ===== */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+    /* ===== GLOBAL VARIABLES (ENTERPRISE) ===== */
+    :root {
+        --bg-color: #F8FAFC; /* Slate-50 */
+        --sidebar-bg: #FFFFFF;
+        --sidebar-border: #E2E8F0; /* Slate-200 */
+        
+        --card-bg: #FFFFFF;
+        --card-border: #E2E8F0;
+        --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.01);
+        
+        --text-heading: #0F172A; /* Slate-900 */
+        --text-body: #334155; /* Slate-700 */
+        --text-muted: #64748B; /* Slate-500 */
+        
+        --primary: #2563EB; /* Blue-600 */
+        --primary-hover: #1D4ED8; /* Blue-700 */
+        --primary-light: #EFF6FF; /* Blue-50 */
+        
+        --success: #059669; /* Emerald-600 */
+        --warning: #D97706; /* Amber-600 */
+        --danger: #DC2626; /* Red-600 */
+        
+        --radius: 8px; /* Professional, tighter radius */
+        --font-main: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+
+    /* ===== BASE ===== */
     .stApp {
-        background-color: #f8fafc;
-        color: #334155;
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        background-color: var(--bg-color);
+        color: var(--text-body);
+        font-family: var(--font-main);
     }
     
-    /* ===== HEADERS ===== */
     h1, h2, h3, h4, h5, h6 {
-        color: #1e293b;
+        color: var(--text-heading) !important;
+        font-family: var(--font-main);
         font-weight: 600;
-        margin-bottom: 1rem;
+        letter-spacing: -0.01em;
     }
     
-    h1 {
-        color: #1e40af;
-        border-bottom: 2px solid #e2e8f0;
-        padding-bottom: 0.5rem;
-        margin-bottom: 1.5rem;
-    }
-    
-    /* ===== CARDS AND CONTAINERS ===== */
-    .stCard {
-        background: white;
-        border: 1px solid #e2e8f0;
-        border-radius: 12px;
+    /* ===== METRICS ===== */
+    .stMetric {
+        background-color: var(--card-bg);
+        border: 1px solid var(--card-border);
+        border-radius: var(--radius);
         padding: 1.5rem;
-        margin-bottom: 1rem;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        box-shadow: var(--card-shadow);
     }
     
-/* ===== ENHANCED METRICS & CARD STYLING ===== */
-.stMetric {
-    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    padding: 1.25rem;
-    margin-bottom: 0.75rem;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-    transition: all 0.3s ease;
-    position: relative;
-    overflow: hidden;
-}
+    .stMetric > div[data-testid="stMetricLabel"] {
+        color: var(--text-muted) !important;
+        font-size: 0.875rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    
+    .stMetric > div[data-testid="stMetricValue"] {
+        color: var(--text-heading) !important;
+        font-weight: 700;
+        font-size: 2rem;
+    }
 
-.stMetric:hover {
-    border-color: #c7d2fe;
-    box-shadow: 0 8px 16px -2px rgba(0, 0, 0, 0.08);
-    transform: translateY(-2px);
-}
+    /* ===== CARDS ===== */
+    .custom-card {
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        border-radius: var(--radius);
+        padding: 1.5rem;
+        box-shadow: var(--card-shadow);
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .custom-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        border-color: var(--primary);
+    }
 
-.stMetric::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 4px;
-    height: 100%;
-    background: linear-gradient(180deg, #4f46e5 0%, #7c3aed 100%);
-    border-radius: 12px 0 0 12px;
-}
-
-/* Different colored stripes for different metrics */
-.stMetric:nth-child(4n+1)::before {
-    background: linear-gradient(180deg, #10b981 0%, #34d399 100%);
-}
-
-.stMetric:nth-child(4n+2)::before {
-    background: linear-gradient(180deg, #3b82f6 0%, #60a5fa 100%);
-}
-
-.stMetric:nth-child(4n+3)::before {
-    background: linear-gradient(180deg, #f59e0b 0%, #fbbf24 100%);
-}
-
-.stMetric:nth-child(4n+4)::before {
-    background: linear-gradient(180deg, #8b5cf6 0%, #a78bfa 100%);
-}
-
-.stMetric > div[data-testid="stMetricLabel"] {
-    color: #475569 !important;
-    font-size: 0.85rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 0.75rem;
-}
-
-.stMetric > div[data-testid="stMetricValue"] {
-    color: #1e293b !important;
-    font-size: 2.2rem;
-    font-weight: 700;
-    line-height: 1.2;
-    margin: 0.25rem 0;
-    text-shadow: none;
-}
-
-.stMetric > div[data-testid="stMetricDelta"] {
-    color: #10b981;
-    font-weight: 600;
-    font-size: 0.9rem;
-}
-
-/* ===== STATUS CARDS (Similar to metrics) ===== */
-.custom-card {
-    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    padding: 1.5rem;
-    margin: 0.75rem 0;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-    transition: all 0.3s ease;
-}
-
-.custom-card:hover {
-    border-color: #c7d2fe;
-    box-shadow: 0 8px 16px -2px rgba(0, 0, 0, 0.08);
-}
-
-.custom-card h3 {
-    color: #1e293b !important;
-    margin: 0 0 0.5rem 0 !important;
-    font-size: 1.8rem !important;
-    font-weight: 700 !important;
-}
-
-.custom-card p {
-    color: #475569 !important;
-    margin: 0 !important;
-    font-size: 0.9rem !important;
-    font-weight: 500 !important;
-}
-
-/* ===== ALL TEXT ELEMENTS ENHANCED CONTRAST ===== */
-.stApp [class*="css"] {
-    color: #334155 !important;
-}
-
-/* Ensure all text in containers has good contrast */
-div[data-testid="column"] * {
-    color: #334155 !important;
-}
-
-/* Fix for any white text on white background */
-.stMetric * {
-    color: #1e293b !important;
-}
-
-/* ===== SPECIFIC FIX FOR METRIC TEXT VISIBILITY ===== */
-[data-testid="stMetricValue"] {
-    color: #0f172a !important;
-    font-weight: 800 !important;
-}
-
-[data-testid="stMetricLabel"] {
-    color: #475569 !important;
-    font-weight: 600 !important;
-}
+    /* ===== SIDEBAR ===== */
+    section[data-testid="stSidebar"] {
+        background-color: var(--sidebar-bg);
+        border-right: 1px solid var(--sidebar-border);
+        box-shadow: 2px 0 8px rgba(0,0,0,0.02);
+    }
+    
     /* ===== BUTTONS ===== */
     .stButton > button {
-        background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+        background-color: var(--primary);
         color: white;
-        border: none;
-        border-radius: 8px;
-        padding: 0.5rem 1rem;
+        border-radius: var(--radius);
         font-weight: 500;
-        transition: all 0.3s ease;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        border: 1px solid transparent;
     }
     
     .stButton > button:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2);
+        background-color: var(--primary-hover);
+        box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);
     }
-    
-    /* ===== SIDEBAR ===== */
-    section[data-testid="stSidebar"] {
-        background-color: #f1f5f9;
-        border-right: 1px solid #e2e8f0;
-    }
-    
-    section[data-testid="stSidebar"] h1, 
-    section[data-testid="stSidebar"] h2, 
-    section[data-testid="stSidebar"] h3 {
-        color: #1e293b;
-    }
-    
-    /* ===== TABS ===== */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 2px;
-        background-color: #f1f5f9;
-        padding: 4px;
-        border-radius: 8px;
-    }
-    
-    .stTabs [data-baseweb="tab"] {
-        background-color: white;
-        border-radius: 6px;
-        color: #64748b;
-        font-weight: 500;
-    }
-    
-    .stTabs [aria-selected="true"] {
-        background-color: #4f46e5;
-        color: white;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-    }
-    
-    /* ===== EXPANDER ===== */
-    .streamlit-expanderHeader {
-        background: white;
-        color: #1e293b;
-        border: 1px solid #e2e8f0;
-        border-radius: 8px;
-        font-weight: 600;
-    }
-    
-    .streamlit-expanderContent {
-        background: white;
-        border: 1px solid #e2e8f0;
-        border-top: none;
-        border-radius: 0 0 8px 8px;
-    }
-    
-    /* ===== SUCCESS/WARNING/ERROR ===== */
-    .stSuccess {
-        background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.05) 100%);
-        border-left: 4px solid #10b981;
-        border-radius: 8px;
-        padding: 1rem;
-    }
-    
-    .stWarning {
-        background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(217, 119, 6, 0.05) 100%);
-        border-left: 4px solid #f59e0b;
-        border-radius: 8px;
-        padding: 1rem;
-    }
-    
-    .stError {
-        background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(220, 38, 38, 0.05) 100%);
-        border-left: 4px solid #ef4444;
-        border-radius: 8px;
-        padding: 1rem;
-    }
-    
-    .stInfo {
-        background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(37, 99, 235, 0.05) 100%);
-        border-left: 4px solid #3b82f6;
-        border-radius: 8px;
-        padding: 1rem;
-    }
-    
-    /* ===== DATA FRAME ===== */
-    .dataframe {
-        border: 1px solid #e2e8f0;
-        border-radius: 8px;
-    }
-    
-    /* ===== SELECT BOXES ===== */
-    .stSelectbox, .stMultiselect, .stNumberInput, .stDateInput, .stSlider {
-        background: white;
-        border-radius: 8px;
-    }
-    
-    /* ===== CHECKBOX ===== */
-    .stCheckbox > label {
-        color: #334155;
-    }
-    
-    /* ===== PROGRESS BAR ===== */
-    .stProgress > div > div > div {
-        background: linear-gradient(90deg, #4f46e5 0%, #7c3aed 100%);
-        border-radius: 4px;
-    }
-    
-    .stProgress > div {
-        background: #e2e8f0;
-        border-radius: 4px;
-    }
-    
-   
-    /* ===== STATUS BADGES ===== */
-    .status-badge {
-        display: inline-block;
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 0.85rem;
-        font-weight: 500;
-        margin: 2px;
-    }
-    
-    .status-selected {
-        background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
-        color: white;
-    }
-    
-    .status-rejected {
-        background: linear-gradient(135deg, #ef4444 0%, #f87171 100%);
-        color: white;
-    }
-    
-    .status-conditional {
-        background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
-        color: white;
-    }
-    
-    /* ===== SCROLLBAR ===== */
-    ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
-    }
-    
-    ::-webkit-scrollbar-track {
-        background: #f1f5f9;
-        border-radius: 4px;
-    }
-    
-    ::-webkit-scrollbar-thumb {
-        background: linear-gradient(135deg, #c7d2fe 0%, #a5b4fc 100%);
-        border-radius: 4px;
-    }
-    
-    ::-webkit-scrollbar-thumb:hover {
-        background: linear-gradient(135deg, #a5b4fc 0%, #818cf8 100%);
+
+    /* ===== ALERTS ===== */
+    .stSuccess { background-color: #ECFDF5; border-left: 4px solid var(--success); color: #065F46; }
+    .stWarning { background-color: #FFFBEB; border-left: 4px solid var(--warning); color: #92400E; }
+    .stError { background-color: #FEF2F2; border-left: 4px solid var(--danger); color: #991B1B; }
+
+    /* ===== DATAFRAME ===== */
+    div[data-testid="stDataFrame"] {
+        border: 1px solid var(--card-border);
+        border-radius: var(--radius);
+        overflow: hidden;
     }
 </style>
 """
@@ -607,7 +400,55 @@ def generate_readable_report_locally(report_data: dict) -> str:
     
     return report
 
+def login_page():
+    st.markdown("""
+    <div style='text-align: center; margin-bottom: 2rem;'>
+        <h1 style='color: #0F172A;'>🔐 HR Portal Login</h1>
+        <p style='color: #64748B;'>Restricted Access Area</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1,1,1])
+    with col2:
+        with st.form("hr_login"):
+            email = st.text_input("Email")
+            password = st.text_input("Password", type="password")
+            submit = st.form_submit_button("Login")
+            
+            if submit:
+                # 1. Check Allowlist
+                if email not in HR_EMAILS:
+                    st.error("⛔ Access Denied: This email is not authorized for HR access.")
+                    return
+                
+                # 2. Verify Credentials
+                db = SessionLocal()
+                user = login_user(db, email, password)
+                db.close()
+                
+                if user:
+                    st.session_state.hr_user = user.email
+                    st.success("Access Granted")
+                    st.rerun()
+                else:
+                    st.error("Invalid credentials")
+
 def main():
+    # Login Check
+    if 'hr_user' not in st.session_state:
+        st.session_state.hr_user = None
+        
+    if not st.session_state.hr_user:
+        login_page()
+        return
+
+    # Logout Button
+    with st.sidebar:
+        st.write(f"Logged in as: **{st.session_state.hr_user}**")
+        if st.button("Logout"):
+            st.session_state.hr_user = None
+            st.rerun()
+
     st.title("📊 HR Interview Dashboard")
     st.markdown("Analyze candidate interview results and performance metrics")
     

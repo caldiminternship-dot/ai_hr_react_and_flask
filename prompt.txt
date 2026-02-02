@@ -1,0 +1,264 @@
+You are an **AI Product Architect, Senior Full-Stack Engineer, and UI/UX Engineer**.
+
+I am building an **AI-Based Recruitment & Interview Automation System** where **HR does NOT manually conduct interviews**.
+
+The system is:
+
+* Automation-first
+* AI-driven
+* API-based
+* Backed by **SQLite as the single source of truth**
+
+I must have **full ownership and control** over:
+
+* Database schema
+* Backend logic & APIs
+* Frontend flow & UI
+* AI prompt logic
+
+---
+
+## 🔹 CORE PROJECT GOAL
+
+Design a web application where:
+
+* Candidates **must apply for a job before any interview**
+* Interviews are conducted **fully and automatically by AI**
+* Interview questions are:
+
+  * Adaptive
+  * Dynamically generated
+  * Context-aware (resume + job requirements)
+* HR **only**:
+
+  * Designs job requirements
+  * Reviews AI-generated interview reports
+  * Makes final hiring decisions
+* HR **never**:
+
+  * Conducts interviews
+  * Asks questions
+  * Communicates directly with candidates
+
+🚫 The system must **strictly enforce process flow** using:
+
+* SQLite constraints
+* Backend authorization logic
+
+---
+
+## 🔹 USER ROLES (ONLY TWO — STRICTLY SEPARATED)
+
+### 👤 Candidate
+
+Capabilities:
+
+* Register & log in
+* View job openings
+* Apply for jobs
+* Upload resume
+* Attend AI interview **only after job application**
+* View interview status
+
+Restrictions:
+
+* Cannot access HR modules
+* Cannot bypass application → interview flow
+
+---
+
+### 🧑‍💼 HR
+
+Capabilities:
+
+* Separate login
+* Create, update, and close job postings
+* Define skills & experience requirements
+* View resumes
+* View AI interview reports
+* Approve or reject candidates
+
+Restrictions:
+
+* Cannot conduct interviews
+* Cannot interact with candidates directly
+
+---
+
+## 🔹 SYSTEM CONSTRAINTS (STRICT)
+
+* Backend logic must remain **unchanged**
+* Database schema must remain **unchanged**
+* API behavior must remain **unchanged**
+* AI access must exist **only in backend**
+* **No interview without job application**
+* Every module must follow:
+
+```
+Frontend → Backend → Database
+```
+
+Focus only on:
+
+* Architecture
+* Flow
+* UI behavior
+* Automation logic
+
+---
+
+## 🔹 UI / FRONTEND DESIGN REQUIREMENTS
+
+### 🌐 Global UI Principles
+
+* Must not be plain white
+* Must not use bright or flashy colors
+* Use modern, subtle, professional palettes
+* Soft contrast, smooth transitions
+* Clean, minimal, production-ready feel
+
+---
+
+### 🧑‍💼 HR Portal UI
+
+* Clear, structured layout
+* Easy navigation for:
+
+  * Dashboard
+  * Job postings
+  * Candidate reviews
+  * Interviews
+  * Hiring decisions
+* Modern UI with:
+
+  * Cards
+  * Shadows
+  * Proper spacing
+  * Subtle animations
+* No clutter
+* Enterprise-grade appearance
+
+---
+
+### 👤 Candidate Portal UI
+
+* Dark-mode-oriented design
+* Soft dark colors to reduce eye strain
+* Clean typography
+* Comfortable spacing
+* Smooth UI feedback during:
+
+  * Long interview sessions
+  * Answer submissions
+  * AI evaluation waiting states
+
+---
+
+## 🔹 REQUIRED OUTPUT
+
+### 1️⃣ Overall System Architecture
+
+* Text-based architecture diagram
+* Frontend ↔ Backend ↔ AI ↔ Database flow
+* Security & access-control explanation
+
+---
+
+### 2️⃣ Module-Wise Breakdown (Recruitment-Only)
+
+Explain **what each module does** and **why it exists**:
+
+1. Authentication Module
+2. Job Management Module
+3. Job Application Module
+4. Resume Screening Module
+5. **Automatic AI Interview Module (MAIN)**
+6. Interview Evaluation & Report Module
+7. HR Review & Decision Module
+
+---
+
+### 3️⃣ Step-by-Step Development Flow (CRITICAL)
+
+For **each module**, clearly explain:
+
+* Frontend pages & routing
+* Backend API responsibilities
+* SQLite tables involved
+* AI involvement (if any)
+* Access rules (Candidate / HR)
+
+---
+
+### 4️⃣ Automatic AI Interview Workflow (CORE)
+
+Explain step-by-step:
+
+1. Candidate applies for a job
+2. Resume is parsed & scored by AI
+3. Interview record is created
+4. AI generates first question using resume + job requirements
+5. Candidate answers
+6. AI generates next question dynamically
+7. Loop continues until interview completion
+8. AI evaluates responses (skills, relevance, communication)
+9. AI generates an explainable interview report
+10. HR reviews report and makes final decision
+
+---
+
+### 5️⃣ SQLite-Driven Process Enforcement
+
+Explain:
+
+* Tables and relationships
+* Purpose of each table
+* How database constraints enforce:
+
+  * No interview without application
+  * One-way recruitment flow
+  * Data integrity and auditability
+
+---
+
+### 6️⃣ Role-Based Access Control
+
+Explain:
+
+* What Candidate can access
+* What HR can access
+* How backend logic enforces strict separation
+
+---
+
+### 7️⃣ Viva / Exam-Ready Summary
+
+Provide:
+
+* Short explanation
+* Automation-focused reasoning
+* Clear, easy-to-remember bullet points
+
+---
+
+## 🔹 DESIGN RULES (ABSOLUTE)
+
+* Interview is impossible without job application
+* HR never interacts during interviews
+* AI controls the entire interview flow
+* HR is reviewer and decision-maker only
+* SQLite enforces process integrity
+* Backend behavior must remain stable and unchanged
+
+---
+
+## 🎯 FINAL OBJECTIVE
+
+Deliver a system where:
+
+* Recruitment is **fully automated**
+* Interviews are **AI-driven**
+* HR effort is **minimal**
+* UI is **modern, professional, and comfortable**
+* Backend integrity is preserved
+* The system is **exam-ready and real-world aligned**

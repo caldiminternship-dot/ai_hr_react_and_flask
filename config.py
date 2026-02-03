@@ -142,3 +142,9 @@ SKILL_CATEGORIES = {
 # Termination keywords
 TERMINATION_KEYWORDS = ["quit", "exit", "stop", "end", "terminate", "abort"]
 ABUSIVE_KEYWORDS = ["tab switching", "stupid", "idiot", "dumb", "worthless", "hate", "useless"]
+
+HR_EMAILS = [
+    "hr@company.com",
+    "admin@company.com",
+    "recruiter@company.com"
+]

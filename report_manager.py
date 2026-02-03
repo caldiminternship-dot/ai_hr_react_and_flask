@@ -35,6 +35,25 @@ class ReportManager:
         csv_path = os.path.join(self.reports_dir, f"{filename}.csv")
         self._save_csv_summary(session_state, csv_path)
         
+    
+        # Save to Database if user is logged in
+        user_id = session_state.get('user_id')
+        if user_id:
+            try:
+                from models import SessionLocal, Report
+                db = SessionLocal()
+                new_report = Report(
+                    user_id=user_id,
+                    file_path=json_path,
+                    score=session_state.get('overall_score', 0)
+                )
+                db.add(new_report)
+                db.commit()
+                db.close()
+                print(f"✅ Report linked to user {user_id}")
+            except Exception as e:
+                print(f"❌ Failed to link report to user: {e}")
+        
         return json_path
     
     def _prepare_report_data(self, session_state: Dict) -> Dict:

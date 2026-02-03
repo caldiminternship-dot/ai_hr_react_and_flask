@@ -12,6 +12,8 @@ from report_manager import ReportManager
 from question_generator import QuestionGenerator
 from resume_parser import parse_resume
 import json
+from auth import login_user, create_user
+from models import init_db, SessionLocal
 
 # Initialize report manager
 report_manager = ReportManager()
@@ -30,506 +32,317 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Professional Dark Theme CSS
-css = """
+# Light Glassmorphism Theme (Candidate Portal)
+# Enterprise Light Theme (Minimalist & Professional)
+css_light = """
 <style>
-    /* ===== BASE THEME ===== */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+
+/* ===== DESIGN TOKENS ===== */
+:root {
+    --bg-main: #F1F5F9; /* Professional Light Gray Base */
+    --panel-bg: #FFFFFF;
+    --sidebar-bg: #FFFFFF;
+    --primary: #1E3A8A; /* Navy Blue Accent */
+    --text-main: #0F172A; 
+    --text-muted: #64748B;
+    --border: #E2E8F0;
+    --radius-lg: 16px;
+    --radius-sm: 8px;
+}
+
+/* ===== APP BACKGROUND ===== */
+.stApp {
+    background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 25%, #E0E7FF 50%, #DDD6FE 75%, #EDE9FE 100%);
+    color: var(--text-main);
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    min-height: 100vh;
+}
+
+/* ===== SIDEBAR ===== */
+section[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%);
+    border-right: 1px solid var(--border);
+    box-shadow: 2px 0 12px rgba(30, 58, 138, 0.08);
+}
+
+/* ===== MAIN CONTENT WRAPPER ===== */
+.main > div {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2.5rem 2rem;
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
+    border-radius: 24px;
+    box-shadow: 0 8px 32px rgba(30, 58, 138, 0.1);
+}
+
+/* ===== SECTION HEADERS ===== */
+h1, h2, h3 {
+    color: #1E3A8A; /* Navy Blue Headers */
+    font-weight: 700;
+}
+
+/* ===== PRIMARY CONTENT CARD ===== */
+div.block-container {
+    background: transparent; /* Clean Slate */
+}
+
+/* ===== FILE UPLOADER (NARROWER) ===== */
+[data-testid="stFileUploader"] {
+    max-width: 500px !important;
+    margin: 0 auto !important; /* Center it */
+}
+
+[data-testid="stFileUploader"] section {
+    background: #FFFFFF !important;
+    border: 1px dashed #CBD5E1 !important;
+    border-radius: 12px;
+    padding: 1.5rem !important;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    transition: all 0.2s;
+}
+
+[data-testid="stFileUploader"] section:hover {
+    border-color: var(--primary) !important;
+    background: #F8FAFC !important;
+}
+
+/* ===== BROWSE FILES BUTTON ===== */
+[data-testid="stFileUploader"] button {
+    border-radius: 8px;
+    border: 1px solid #E2E8F0;
+    color: #1E3A8A; /* Navy Text */
+    font-weight: 600;
+}
+
+/* ===== PRIMARY CTA ===== */
+.stButton > button {
+    background: linear-gradient(135deg, #2563EB, #1D4ED8);
+    color: white;
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 0.9rem 2rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    width: auto !important;
+    min-width: 150px;
+}
+
+.stButton > button:hover {
+    box-shadow: 0 12px 24px rgba(37, 99, 235, 0.3);
+    transform: translateY(-1px);
+}
+
+/* ===== REMOVE STREAMLIT NOISE ===== */
+div[data-testid="stToolbar"],
+footer {
+    display: none !important;
+}
+
+/* ===== VISUAL POLISH ===== */
+.verified-badge {
+    background: linear-gradient(135deg, #DEF7EC 0%, #E1EFFE 100%);
+    color: #03543F;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border: 1px solid #BCF0DA;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    vertical-align: middle;
+    margin-left: 12px;
+}
+
+.step-card {
+    background: #FFFFFF;
+    padding: 1.5rem;
+    border-radius: 12px;
+    margin: 0.75rem 0;
+    border: 1px solid #E2E8F0;
+    border-left: 4px solid #3B82F6; /* Default Blue Accent */
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.step-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    border-left-color: #2563EB;
+}
+
+
+</style>
+"""
+
+# Professional Light Login Theme
+css_login = """
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+    /* ===== GLOBAL VARIABLES (LOGIN) ===== */
+    :root {
+        --bg-color: #F8FAFC; 
+        --card-bg: #FFFFFF;
+        --text-heading: #0F172A;
+        --text-body: #475569;
+        
+        --primary: #4F46E5; /* Indigo-600 */
+        --primary-hover: #4338CA;
+        
+        --radius: 12px;
+    }
+
+    /* ===== BASE ===== */
+    /* ===== BASE ===== */
     .stApp {
-        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-        color: #f8fafc;
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        background-color: #F8FAFC;
+        background-image: 
+            radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%), 
+            radial-gradient(at 50% 0%, hsla(225,39%,30%,1) 0, transparent 50%), 
+            radial-gradient(at 100% 0%, hsla(339,49%,30%,1) 0, transparent 50%);
+        background-size: 200% 200%;
+        animation: gradient-animation 15s ease infinite;
+        color: var(--text-body);
+        font-family: 'Inter', sans-serif;
+    }
+    
+    @keyframes gradient-animation {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+    
+    /* Overlay for lightness (since we want light theme but colorful) */
+    .stApp::before {
+        content: "";
+        position: fixed;
+        top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(255, 255, 255, 0.85); /* Glass overlay */
+        backdrop-filter: blur(100px);
+        z-index: -1;
+    }
+    
+    h1 {
+        color: var(--text-heading) !important;
+        font-weight: 700 !important;
+        letter-spacing: -0.02em;
     }
 
-    /* ===== HEADER STYLING ===== */
-    .main-header {
-        background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.95) 100%);
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 20px;
-        padding: 2.5rem 2rem;
-        margin: 1rem auto 2rem;
-        max-width: 95%;
-        box-shadow: 
-            0 10px 25px rgba(0, 0, 0, 0.3),
-            inset 0 1px 0 rgba(255, 255, 255, 0.1);
-        position: relative;
-        overflow: hidden;
-    }
-
-    .main-header::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 2px;
-        background: linear-gradient(90deg, #6366f1, #8b5cf6, #ec4899);
-    }
-
-    .main-header h1 {
-        background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
+    /* ===== NAVY BLUE TITLE ===== */
+    .gradient-text {
+        background: linear-gradient(135deg, #1e3a8a 0%, #172554 100%); /* Navy Blue Gradient */
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        font-size: 2.8rem;
-        font-weight: 800;
-        letter-spacing: -0.5px;
-        margin-bottom: 0.75rem;
-        text-align: center;
+        background-clip: text;
+        text-fill-color: transparent;
+        font-weight: 800 !important;
+        text-shadow: 0px 2px 4px rgba(0,0,0,0.1);
     }
 
-    .main-header p {
-        color: #94a3b8;
-        font-size: 1.1rem;
-        font-weight: 400;
-        text-align: center;
-        max-width: 800px;
+    /* ===== LOGIN INPUTS ===== */
+    .stTextInput > div > div > input {
+        background-color: #F8FAFC;
+        color: #0F172A; /* Dark Text */
+        border: 2px solid #E2E8F0;
+        border-radius: 12px;
+        padding: 0.8rem 1rem;
+        transition: all 0.2s ease;
+    }
+    
+    .stTextInput > div > div > input:focus {
+        border-color: #1e3a8a; /* Navy focus */
+        background-color: #FFFFFF;
+        box-shadow: 0 0 0 4px rgba(30, 58, 138, 0.1);
+        outline: none;
+    }
+
+    /* ===== LOGIN CARD (ATTRACTIVE) ===== */
+    /* Target the tab container specifically */
+    .stTabs {
+        background-color: rgba(255, 255, 255, 0.95); /* More solid for contrast */
+        backdrop-filter: blur(25px);
+        padding: 2.5rem;
+        border-radius: 24px;
+        box-shadow: 
+            0 25px 50px -12px rgba(0, 0, 0, 0.15), /* Deep shadow */
+            0 0 0 1px rgba(255, 255, 255, 1) inset; /* Inner highlight */
+        border: 1px solid rgba(226, 232, 240, 0.6);
+        max-width: 450px;
         margin: 0 auto;
-        line-height: 1.6;
     }
     
-    .header {
-        text-align:center;
-        padding: 1.5rem 1rem;
-        margin: 0.5rem 0 1.5rem;
-    }
-    
-    /* ===== CARD STYLING ===== */
-    .stCard {
-        background: rgba(30, 41, 59, 0.7);
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 16px;
-        padding: 1.75rem;
-        margin-bottom: 1.25rem;
-        transition: all 0.3s ease;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    label {
+        color: #475569 !important;
+        font-weight: 600;
+        font-size: 0.9rem;
+        margin-bottom: 0.4rem;
+        letter-spacing: 0.01em;
     }
 
-    .stCard:hover {
-        border-color: rgba(99, 102, 241, 0.3);
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2);
-    }
-
-    /* ===== CHAT INTERFACE ===== */
-    .chat-container {
-        background: rgba(15, 23, 42, 0.8);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 16px;
-        padding: 1.5rem;
-        margin-bottom: 1.5rem;
-        backdrop-filter: blur(10px);
-    }
-
-    .chat-message {
-        padding: 1.25rem;
-        border-radius: 14px;
-        margin: 1rem 0;
-        border-left: 4px solid;
-        animation: slideIn 0.3s ease-out;
-    }
-
-    @keyframes slideIn {
-        from {
-            opacity: 0;
-            transform: translateY(10px);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-
-    .interviewer-message {
-        background: linear-gradient(135deg, rgba(79, 70, 229, 0.15) 0%, rgba(67, 56, 202, 0.1) 100%);
-        border-color: #4f46e5;
-        margin-right: 2rem;
-    }
-
-    .candidate-message {
-        background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.1) 100%);
-        border-color: #10b981;
-        margin-left: 2rem;
-    }
-
-    .system-message {
-        background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(217, 119, 6, 0.1) 100%);
-        border-color: #f59e0b;
-        margin: 1rem auto;
-        max-width: 90%;
-    }
-
-    /* ===== BUTTON STYLING ===== */
+    /* ===== BUTTONS ===== */
     .stButton > button {
-        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        background: linear-gradient(135deg, #1e3a8a 0%, #172554 100%); /* Navy Blue Gradient */
         color: white;
         border: none;
         border-radius: 12px;
-        padding: 0.75rem 1.5rem;
-        font-weight: 600;
-        font-size: 0.95rem;
-        transition: all 0.3s ease;
-        box-shadow: 0 4px 6px -1px rgba(99, 102, 241, 0.2);
-        position: relative;
-        overflow: hidden;
-    }
-
-    .stButton > button::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: -100%;
+        padding: 0.85rem 0;
         width: 100%;
-        height: 100%;
-        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
-        transition: left 0.6s;
+        font-weight: 700;
+        font-size: 1.05rem;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 4px 6px -1px rgba(30, 58, 138, 0.3);
+        letter-spacing: 0.02em;
+        margin-top: 1rem;
     }
-
+    
     .stButton > button:hover {
+        background: linear-gradient(135deg, #172554 0%, #0f172a 100%);
         transform: translateY(-2px);
-        box-shadow: 0 8px 15px -3px rgba(99, 102, 241, 0.3);
+        box-shadow: 0 10px 15px -3px rgba(30, 58, 138, 0.4);
     }
-
-    .stButton > button:hover::before {
-        left: 100%;
-    }
-
+    
     .stButton > button:active {
         transform: translateY(0);
     }
 
-    /* ===== INPUT FIELDS ===== */
-    .stTextArea textarea {
-        background: rgba(15, 23, 42, 0.8);
-        color: #f8fafc;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 12px;
-        padding: 1rem;
-        font-size: 1rem;
-        transition: all 0.3s ease;
-        min-height: 150px;
-    }
-
-    .stTextArea textarea:focus {
-        border-color: #6366f1;
-        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
-        outline: none;
-    }
-
-    .stTextArea textarea::placeholder {
-        color: #64748b;
-    }
-
-    /* ===== METRIC CARDS ===== */
-    .stMetric {
-        background: rgba(30, 41, 59, 0.7);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 16px;
-        padding: 1.25rem;
-        margin: 0.5rem 0;
-        backdrop-filter: blur(10px);
-    }
-
-    .stMetric > div[data-testid="stMetricLabel"] {
-        color: #94a3b8;
-        font-size: 0.9rem;
-        font-weight: 500;
-        letter-spacing: 0.5px;
-        text-transform: uppercase;
-    }
-
-    .stMetric > div[data-testid="stMetricValue"] {
-        color: #f8fafc;
-        font-size: 2rem;
-        font-weight: 700;
-        margin: 0.5rem 0;
-    }
-
-    /* ===== PROGRESS BAR ===== */
-    .stProgress > div > div > div {
-        background: linear-gradient(90deg, #6366f1, #8b5cf6, #ec4899);
-        border-radius: 10px;
-    }
-
-    .stProgress > div {
-        background: rgba(255, 255, 255, 0.1);
-        border-radius: 10px;
-        height: 10px;
-    }
-
-    /* ===== SIDEBAR ===== */
-    section[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
-        border-right: 1px solid rgba(255, 255, 255, 0.1);
-    }
-
-    section[data-testid="stSidebar"] .stButton > button {
-        margin-bottom: 0.75rem;
-        width: 100%;
-    }
-
     /* ===== TABS ===== */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 4px;
-        background: rgba(30, 41, 59, 0.5);
-        padding: 6px;
-        border-radius: 12px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
+        gap: 8px;
+        margin-bottom: 2rem;
+        border-bottom: 1px solid #E2E8F0;
+        padding-bottom: 1rem;
     }
-
+    
     .stTabs [data-baseweb="tab"] {
-        background: transparent;
+        background-color: transparent;
         border-radius: 8px;
-        color: #94a3b8;
-        font-weight: 500;
-        padding: 0.75rem 1.5rem;
-        transition: all 0.3s ease;
-    }
-
-    .stTabs [aria-selected="true"] {
-        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-        color: white;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-    }
-
-    /* ===== EXPANDER ===== */
-    .streamlit-expanderHeader {
-        background: rgba(30, 41, 59, 0.7);
-        color: #f8fafc;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 12px;
+        color: #64748B;
         font-weight: 600;
-        padding: 1rem 1.25rem;
-    }
-
-    .streamlit-expanderContent {
-        background: rgba(15, 23, 42, 0.8);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-top: none;
-        border-radius: 0 0 12px 12px;
-        padding: 1.25rem;
-    }
-
-    /* ===== STATUS MESSAGES ===== */
-    .stSuccess {
-        background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.1) 100%);
-        border-left: 4px solid #10b981;
-        border-radius: 12px;
-        padding: 1.25rem;
-        margin: 1rem 0;
-    }
-
-    .stWarning {
-        background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(217, 119, 6, 0.1) 100%);
-        border-left: 4px solid #f59e0b;
-        border-radius: 12px;
-        padding: 1.25rem;
-        margin: 1rem 0;
-    }
-
-    .stError {
-        background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(220, 38, 38, 0.1) 100%);
-        border-left: 4px solid #ef4444;
-        border-radius: 12px;
-        padding: 1.25rem;
-        margin: 1rem 0;
-    }
-
-    .stInfo {
-        background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(37, 99, 235, 0.1) 100%);
-        border-left: 4px solid #3b82f6;
-        border-radius: 12px;
-        padding: 1.25rem;
-        margin: 1rem 0;
-    }
-
-    /* ===== CUSTOM STATUS ===== */
-    .custom-success {
-        background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.1) 100%);
-        border-left: 4px solid #10b981;
-        border-radius: 14px;
-        padding: 1.5rem;
-        margin: 1.25rem 0;
-    }
-
-    .custom-warning {
-        background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(217, 119, 6, 0.1) 100%);
-        border-left: 4px solid #f59e0b;
-        border-radius: 14px;
-        padding: 1.5rem;
-        margin: 1.25rem 0;
-    }
-
-    /* ===== TYPOGRAPHY ===== */
-    h1, h2, h3, h4, h5, h6 {
-        color: #f1f5f9;
-        font-weight: 700;
-        letter-spacing: -0.025em;
-    }
-
-    h1 {
-        font-size: 2.5rem;
-        background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-    }
-
-    h2 {
-        font-size: 2rem;
-        margin-top: 1.5rem;
-        margin-bottom: 1rem;
-    }
-
-    p, div, span {
-        color: #cbd5e1;
-        line-height: 1.6;
-    }
-
-    /* ===== DIVIDER ===== */
-    hr {
+        padding: 0.6rem 1.2rem;
         border: none;
-        height: 1px;
-        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-        margin: 2rem 0;
+        transition: all 0.2s;
     }
-
-    /* ===== CODE BLOCKS ===== */
-    code {
-        background: rgba(30, 41, 59, 0.8);
-        color: #7dd3fc;
-        padding: 0.25rem 0.5rem;
-        border-radius: 6px;
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 0.9rem;
-        border: 1px solid rgba(255, 255, 255, 0.1);
+    
+    .stTabs [aria-selected="true"] {
+        background-color: #EFF6FF; /* Very light blue */
+        color: #1e3a8a; /* Navy Blue Text */
     }
-
-    /* ===== SCROLLBAR STYLING ===== */
-    ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
+    
+    .stTabs [aria-selected="false"]:hover {
+        background-color: #F8FAFC;
+        color: #475569;
     }
-
-    ::-webkit-scrollbar-track {
-        background: rgba(15, 23, 42, 0.5);
-        border-radius: 4px;
-    }
-
-    ::-webkit-scrollbar-thumb {
-        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-        border-radius: 4px;
-    }
-
-    ::-webkit-scrollbar-thumb:hover {
-        background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
-    }
-
-    /* ===== GLASS EFFECT UTILITY ===== */
-    .glass-effect {
-        background: rgba(30, 41, 59, 0.7);
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 16px;
-    }
-
-    /* ===== TOOLTIP STYLING ===== */
-    .stTooltip {
-        background: rgba(15, 23, 42, 0.95);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 8px;
-        padding: 0.75rem;
-        font-size: 0.9rem;
-    }
-
-    /* ===== ANIMATIONS ===== */
-    @keyframes pulse {
-        0%, 100% {
-            opacity: 1;
-        }
-        50% {
-            opacity: 0.7;
-        }
-    }
-
-    .pulse-animation {
-        animation: pulse 2s infinite;
-    }
-
-    /* ===== RESPONSIVE DESIGN ===== */
-    @media (max-width: 768px) {
-        .main-header {
-            padding: 1.5rem 1rem;
-            margin: 0.5rem 0 1.5rem;
-        }
-        
-        .main-header h1 {
-            font-size: 2rem;
-        }
-        
-        .stCard {
-            padding: 1.25rem;
-            margin-bottom: 1rem;
-        }
-        
-        .chat-message {
-            padding: 1rem;
-            margin: 0.75rem 0;
-        }
-        
-        .stButton > button {
-            padding: 0.625rem 1.25rem;
-            font-size: 0.9rem;
-        }
-    }
-
-    /* ===== FOCUS STATES ===== */
-    :focus-visible {
-        outline: 2px solid #6366f1;
-        outline-offset: 2px;
-        border-radius: 4px;
-    }
-
-    /* ===== SELECTION COLOR ===== */
-    ::selection {
-        background: rgba(99, 102, 241, 0.3);
-        color: white;
-    }
-
-    /* ===== LOADING SPINNER ===== */
-    .stSpinner > div {
-        border-color: #6366f1 transparent transparent transparent;
-    }
-
-    /* ===== DATA FRAME STYLING ===== */
-    .dataframe {
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 12px;
-        overflow: hidden;
-    }
-
-    /* ===== FORM STYLING ===== */
-    .stSelectbox, .stMultiselect, .stNumberInput, .stDateInput {
-        background: rgba(15, 23, 42, 0.8);
-        border-radius: 12px;
-    }
-
-    /* ===== RADIO BUTTONS ===== */
-    .stRadio > div {
-        background: rgba(15, 23, 42, 0.8);
-        padding: 1rem;
-        border-radius: 12px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-    }
-
-    /* ===== CHECKBOX STYLING ===== */
-    .stCheckbox > label {
-        color: #cbd5e1;
-    }
+    
 </style>
 """
-
-
-
-st.markdown(css, unsafe_allow_html=True)
 
 # Initialize session state
 def init_session_state():
@@ -557,7 +370,11 @@ def init_session_state():
         # TAB SWITCHING DETECTION VARIABLES
         'tab_switch_count': 0,
         'tab_warning_given': False,
+        'tab_switch_count': 0,
+        'tab_warning_given': False,
         'auto_terminate_tab_switch': False,
+        'user': None,
+        'user_id': None,
     }
     
     for key, value in defaults.items():
@@ -749,12 +566,6 @@ def process_response(response_text):
         st.session_state.introduction_analyzed = True
         st.session_state.current_question_index = 1
 
-        st.session_state.messages.append({
-            "role": "system",
-            "content": f"🔒 Skill locked: **{locked_skill.upper()}**. Interview questions fixed.",
-            "timestamp": datetime.now().strftime("%H:%M:%S")
-        })
-
         st.session_state.current_response = ""
         st.rerun()
         return
@@ -807,20 +618,28 @@ def show_interview_in_progress():
     """Display interview interface when interview is active"""
     
     st.markdown("""
-    <div class='main-header'>
-        <h1>Interview in Progress</h1>
-        <p>Complete the technical interview questions below</p>
+    <div class='main-header' style='
+        background: rgba(255, 255, 255, 0.6);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.5);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        border-radius: 16px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+    '>
+        <h1 style='margin-bottom: 0.5rem;'>Interview in Progress</h1>
+        <p style='margin-bottom: 0;'>Complete the technical interview questions below</p>
     </div>
     """, unsafe_allow_html=True)
     
     # Question display
     if not st.session_state.get("introduction_analyzed", False):
-        st.markdown("### 📄 Upload Your Resume to Begin")
-        uploaded_file = st.file_uploader("Upload your resume (PDF or DOCX)", type=['pdf', 'docx', 'doc'])
+        st.markdown("### 📄 Job Application - Step 1: Resume Upload")
+        uploaded_file = st.file_uploader("To begin your application, please upload your resume (PDF or DOCX)", type=['pdf', 'docx', 'doc'])
         
         if uploaded_file is not None:
-            if st.button("Start Interview"):
-                with st.spinner("Analyzing your resume..."):
+            if st.button("Submit Application & Start Interview"):
+                with st.spinner("Processing application..."):
                     # Parse resume
                     resume_text = parse_resume(uploaded_file)
                     
@@ -912,13 +731,15 @@ def show_interview_in_progress():
         if current_prompt:
             st.markdown(f"""
             <div style="
-                background: rgba(30, 41, 59, 0.7);
-                border-left: 5px solid #6366f1;
-                padding: 20px;
-                border-radius: 5px;
-                margin-bottom: 20px;
-                font-size: 1.1em;
+                background: #EFF6FF;
+                border: 1px solid #BFDBFE;
+                padding: 1.5rem;
+                border-radius: 12px;
+                margin-bottom: 2rem;
+                font-size: 1.15em;
                 font-weight: 500;
+                color: #1E293B;
+                box-shadow: 0 1px 2px rgba(0,0,0,0.05);
             ">
                 {current_prompt}
             </div>
@@ -931,10 +752,11 @@ def show_interview_in_progress():
             "Your Response:",
             value=st.session_state.get("current_response", ""),
             key=f"response_input_{st.session_state.current_question_index}",
-            height=180,
+            height=200,
             placeholder="Type your detailed response here...",
             help="Provide a comprehensive answer with examples where possible"
         )
+        
         # 🔒 DISPLAY LOCKED SKILL AFTER INTRO QUESTION
         if st.session_state.introduction_analyzed and st.session_state.candidate_profile:
             locked_skill = st.session_state.candidate_profile.get("primary_skill", "").upper()
@@ -943,21 +765,17 @@ def show_interview_in_progress():
             st.markdown(
                 f"""
                 <div style="
-                    margin-top: 10px;
-                    padding: 12px 16px;
-                    border-radius: 12px;
-                    background: linear-gradient(135deg, rgba(16,185,129,0.15), rgba(5,150,105,0.1));
-                    border-left: 4px solid #10b981;
-                    color: #d1fae5;
-                    font-size: 0.95rem;
-                    display: flex;
-                    justify-content: space-between;
+                    margin: 1rem 0 2rem 0;
+                    padding: 8px 16px;
+                    border-radius: 20px;
+                    background: #F1F5F9;
+                    display: inline-flex;
                     align-items: center;
+                    gap: 8px;
+                    border: 1px solid #E2E8F0;
                 ">
-                    <span>🔒 <strong>Skill Locked:</strong> {locked_skill}</span>
-                    <span style="color:#a7f3d0; font-size: 0.85rem;">
-                        Detected Keys: {", ".join(detected_skills[:5])}
-                    </span>
+                    <span style="color: #64748B;">🔒 Skill:</span>
+                    <strong style="color: #0F172A;">{locked_skill}</strong>
                 </div>
                 """,
                 unsafe_allow_html=True
@@ -967,20 +785,21 @@ def show_interview_in_progress():
         # Update session state with current response
         st.session_state.current_response = response
         
-        # Submit button
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            if current_prompt:
-                if st.button("📤 Submit Response", type="primary", use_container_width=True, key=f"submit_response_{st.session_state.current_question_index}"):
+        # Submit button - Centralized Focal Point
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        # Use columns to assign position to right
+        if current_prompt:
+            c1, c2 = st.columns([5, 1])
+            with c2:
+                if st.button("Submit Response", type="primary", use_container_width=True, key=f"submit_response_{st.session_state.current_question_index}"):
                     if response and response.strip():
-                        # Process the response
                         process_response(response.strip())
                     else:
                         st.warning("Please enter a response before submitting.")
-            else:
-                # End Interview Button when completed
-                if st.button("🏁 End Interview", type="primary", use_container_width=True, key="end_interview_main"):
-                    st.session_state.interview_completed = True
+        else:
+            if st.button("🏁 End Interview", type="primary", use_container_width=True, key="end_interview_main"):
+                st.session_state.interview_completed = True
                 st.session_state.interview_active = False
                 st.rerun()
     
@@ -1026,53 +845,87 @@ def show_welcome_screen():
     """Display welcome screen"""
     
     # Welcome content in a centered layout
-    col1, col2, col3 = st.columns([1, 3, 1])
-    with col2:
+    # col1, col2, col3 = st.columns([1, 3, 1])
+    # with col2:
+    with st.container():
+
+        # Welcome content
         st.markdown("""
-        <div style='text-align: center; margin-bottom: 2rem;'>
-            <h2 style='color: #64B5F6;'>Welcome to Your Technical Interview</h2>
-            <p style='color: #B0BEC5; font-size: 1.1rem;'>
+        <div style='
+            text-align: center; 
+            margin-bottom: 3rem;
+            background: linear-gradient(135deg, #FFFFFF 0%, #F0F9FF 100%);
+            padding: 2.5rem 2rem;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(59, 130, 246, 0.15);
+            border: 1px solid #BFDBFE;
+        '>
+            <div style='margin-bottom: 1rem;'>
+                <span class='verified-badge'>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    Enterprise Verified
+                </span>
+            </div>
+            <h1 style='color: #1E3A8A; font-size: 32px; font-weight: 700; margin-bottom: 0.5rem;'>Welcome to Your Technical Interview</h1>
+            <p style='color: #475569; font-size: 1.1rem; max-width: 600px; margin: 0 auto;'>
                 Prepare to showcase your skills through an AI-powered adaptive interview process
             </p>
         </div>
         """, unsafe_allow_html=True)
         
-        # How it works section
-        st.markdown("### 📋 How it works:")
+        # How it works section (Redesigned)
+        st.markdown("""
+        <div style='
+            background: linear-gradient(135deg, #1E3A8A 0%, #3B82F6 100%);
+            padding: 1rem 1.5rem;
+            border-radius: 12px;
+            margin-bottom: 1rem;
+            box-shadow: 0 4px 12px rgba(30, 58, 138, 0.2);
+        '>
+        </div>
+        """, unsafe_allow_html=True)
         
-        steps = [
-            (" Introduction", "Share your background, skills, and relevant experience"),
-            (" AI Analysis", "Our system evaluates your technical profile"),
-            (" Adaptive Questions", "Answer AI-generated tailored technical questions"),
-            (" Dynamic Follow-ups", "Questions adapt based on your previous answers"),
-            (" Comprehensive Review", "HR team receives detailed analysis")
-        ]
-        
-        for icon, description in steps:
-            st.markdown(f"""
-            <div style='background: #1e1e2e; padding: 1rem; border-radius: 8px; margin: 0.5rem 0; border-left: 4px solid #64B5F6;'>
-                <div style='display: flex; align-items: center; gap: 10px;'>
-                    <span style='font-size: 1.5rem; width: 28%;'>{icon}</span>
-                    <div>
-                        <strong style='color: #E2E8F0;'>{' '.join(icon.split()[1:])}</strong><br>
-                        <span style='color: #CBD5E0;'>{description}</span>
-                    </div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+        # Minimized, compact list without heavy divisions
+        st.markdown("""
+        <div style='
+            background: linear-gradient(135deg, #DBEAFE 0%, #E0E7FF 50%, #DDD6FE 100%);
+            border-radius: 16px; 
+            padding: 2rem; 
+            box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.15);
+            border: 1px solid #BFDBFE;
+            margin-top: 1rem;
+        '>
+            <p style='color: #1E3A8A; font-size: 1rem; font-weight: 500; margin: 0; line-height: 1.8;'>
+                This interview uses AI to generate adaptive questions based on your responses, providing a more personalized and relevant assessment of your skills.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+
         
         # AI-Powered note
         st.markdown("""
-        <div class='custom-success'>
-            <h4 style='color: #4CAF50; margin-top: 0;'>🤖 AI-Powered Interview</h4>
-            <p>This interview uses AI to generate adaptive questions based on your responses, 
-            providing a more personalized and relevant assessment of your skills.</p>
+        <div style='
+            background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%); 
+            border: 1px solid #A7F3D0; 
+            border-radius: 12px; 
+            padding: 1.5rem; 
+            margin-top: 2rem;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.1);
+        '>
+            <h4 style='color: #065F46; margin: 0 0 0.5rem 0; font-size: 1rem; font-weight: 600;'>🤖 AI-Powered Interview</h4>
+            <p style='color: #047857; margin: 0; font-size: 0.95rem; line-height: 1.6;'>
+                This interview uses AI to generate adaptive questions based on your responses, 
+                providing a more personalized and relevant assessment of your skills.
+            </p>
         </div>
         """, unsafe_allow_html=True)
         
         # Start button
         st.markdown("<br>", unsafe_allow_html=True)
-        col1, col2, col3 = st.columns([1, 2, 1])
+        # col1, col2, col3 = st.columns([1, 2, 1])
+        # with col2:
+        # Start Interview Button - Centered
+        col1, col2, col3 = st.columns([1, 1, 1])
         with col2:
             if st.button("Start Interview", type="primary", use_container_width=True, key="start_interview_btn"):
                 st.session_state.interview_started = True
@@ -1083,8 +936,8 @@ def show_termination_screen():
     """Display termination screen"""
     
     st.markdown("""
-    <div class='main-header' style='background: linear-gradient(135deg, #2c003e 0%, #4a148c 100%);'>
-        <h1>⛔ Interview Terminated</h1>
+    <div class='main-header' style='border-color: #FECACA;'>
+        <h1 style='color: #DC2626 !important;'>⛔ Interview Terminated</h1>
         <p>The interview session has been concluded</p>
     </div>
     """, unsafe_allow_html=True)
@@ -1097,10 +950,17 @@ def show_termination_screen():
         "insufficient_response": "Response was too brief or unclear"
     }
     
+    # Styled Warning Card
     st.markdown(f"""
-    <div class='custom-warning'>
-        <h4 style='color: #FFC107; margin-top: 0;'>Termination Reason</h4>
-        <p style='font-size: 1.1rem;'>{reasons_map.get(reason, reason)}</p>
+    <div style='
+        background: #FEF2F2; 
+        border: 1px solid #FECACA; 
+        border-radius: 12px; 
+        padding: 1.5rem; 
+        margin: 2rem 0;
+    '>
+        <h4 style='color: #B91C1C; margin-top: 0; font-size: 1.1rem;'>Termination Reason</h4>
+        <p style='color: #7F1D1D; font-size: 1rem; margin: 0;'>{reasons_map.get(reason, reason)}</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -1108,10 +968,17 @@ def show_termination_screen():
         with st.expander("📋 Termination Details", expanded=True):
             for log in st.session_state.termination_log:
                 st.markdown(f"""
-                <div style='background: #1e1e2e; padding: 1rem; border-radius: 6px; margin: 0.5rem 0; border: 1px solid #2d3748;'>
-                    <strong>Time:</strong> {log.get('time', 'N/A')}<br>
-                    <strong>Reason:</strong> {log.get('reason', 'N/A')}<br>
-                    <strong>Response:</strong> {log.get('response', 'N/A')}
+                <div style='
+                    background: #FFFFFF; 
+                    padding: 1rem; 
+                    border-radius: 8px; 
+                    margin: 0.5rem 0; 
+                    border: 1px solid #E2E8F0;
+                    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+                '>
+                    <strong style='color: #0F172A;'>Time:</strong> <span style='color: #475569;'>{log.get('time', 'N/A')}</span><br>
+                    <strong style='color: #0F172A;'>Reason:</strong> <span style='color: #475569;'>{log.get('reason', 'N/A')}</span><br>
+                    <strong style='color: #0F172A;'>Response:</strong> <span style='color: #475569;'>{log.get('response', 'N/A')}</span>
                 </div>
                 """, unsafe_allow_html=True)
     
@@ -1201,8 +1068,95 @@ def check_and_process_termination():
         
     return False
 
+    return False
+
+def login_page():
+    st.markdown("""
+        <div style='text-align: center; margin-bottom: 2.5rem; margin-top: 4rem;'>
+            <h1 class='gradient-text' style='font-size: 3.5rem; margin-bottom: 0.5rem; letter-spacing: -0.03em;'>AI Recruiter</h1>
+            <p style='color: #64748B; font-size: 1.15rem; font-weight: 500;'>The Future of Hiring, Automated.</p>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # Concise Centered Layout
+    col1, col2, col3 = st.columns([1, 0.8, 1])
+    with col2:
+
+
+        # Create a container for the card effect (styled via CSS)
+        with st.container():
+            tab1, tab2 = st.tabs(["🔐 Login", "📝 Sign Up"])
+        
+        with tab1:
+            with st.form("login_form"):
+                email = st.text_input("Email")
+                password = st.text_input("Password", type="password")
+                submit = st.form_submit_button("Login")
+                
+                if submit:
+                    try:
+                        db = SessionLocal()
+                        user = login_user(db, email, password)
+                        db.close()
+                        if user:
+                            st.session_state.user = user.email
+                            st.session_state.user_id = user.id
+                            st.success("Logged in successfully!")
+                            st.rerun()
+                        else:
+                            st.error("Invalid email or password")
+                    except Exception as e:
+                        st.error(f"Database error: {e}")
+        
+        with tab2:
+            with st.form("signup_form"):
+                new_email = st.text_input("Email")
+                new_password = st.text_input("Password", type="password")
+                confirm_password = st.text_input("Confirm Password", type="password")
+                submit_signup = st.form_submit_button("Sign Up")
+                
+                if submit_signup:
+                    if new_password != confirm_password:
+                        st.error("Passwords do not match")
+                    else:
+                        try:
+                            db = SessionLocal()
+                            user, msg = create_user(db, new_email, new_password)
+                            db.close()
+                            if user:
+                                st.session_state.user = user.email
+                                st.session_state.user_id = user.id
+                                st.success("Account created! Logging in...")
+                                st.rerun()
+                            else:
+                                st.error(f"Error: {msg}")
+                        except Exception as e:
+                            st.error(f"Database error: {e}")
+
 def main():
     """Main application function"""
+    try:
+        init_db()
+    except Exception as e:
+        st.error(f"Database connection error: {e}")
+
+    if 'user' not in st.session_state:
+        st.session_state.user = None
+        
+    # ===== THEME INJECTION =====
+    # Conditional CSS based on login state
+    if not st.session_state.user:
+        st.markdown(css_login, unsafe_allow_html=True)
+        login_page()
+        return
+    else:
+        st.markdown(css_light, unsafe_allow_html=True)
+
+    # Sidebar user info now moved to bottom
+    # with st.sidebar:
+        # User info is now handled in the main sidebar block
+        # pass
+
     
     # ===== IMMEDIATE TAB SWITCHING TERMINATION CHECK =====
     # This MUST be at the VERY BEGINNING
@@ -1364,15 +1318,32 @@ def main():
 
     # ===== HEADER =====
     st.markdown("""
-    <div class='main-header'>
-        <h1>Virtual HR</h1>
-        <p>AI-Powered Adaptive Technical & Behavioral Screening Platform</p>
+    <div class='main-header' style='
+        text-align: center;
+        background: linear-gradient(135deg, #1E3A8A 0%, #3B82F6 50%, #6366F1 100%);
+        padding: 2rem;
+        border-radius: 16px;
+        margin-bottom: 2rem;
+        box-shadow: 0 8px 24px rgba(30, 58, 138, 0.2);
+    '>
+        <h1 style='color: #FFFFFF; margin-bottom: 0.5rem; font-size: 2rem; font-weight: 700;'>Virtual HR</h1>
+        <p style='color: #E0E7FF; margin: 0; font-size: 1rem;'>AI-Powered Adaptive Technical & Behavioral Screening Platform</p>
     </div>
     """, unsafe_allow_html=True)
     
     # ===== SIDEBAR =====
     with st.sidebar:
-        st.markdown("### Interview Dashboard")
+        st.markdown("""
+        <div style='
+            background: linear-gradient(135deg, #1E3A8A 0%, #3B82F6 100%);
+            padding: 1.25rem;
+            border-radius: 12px;
+            margin-bottom: 1rem;
+            box-shadow: 0 4px 12px rgba(30, 58, 138, 0.2);
+        '>
+            <h3 style='color: #FFFFFF; margin: 0; font-size: 1.1rem; font-weight: 600; text-align: center;'>Interview Dashboard</h3>
+        </div>
+        """, unsafe_allow_html=True)
         st.markdown("---")
         
         if st.session_state.interview_active:
@@ -1382,7 +1353,6 @@ def main():
             
             st.markdown("**Progress**")
             st.progress(progress)
-            # st.caption(f"Question {st.session_state.current_question_index}/{total_questions}")
             
             # Quick actions
             st.markdown("---")
@@ -1397,29 +1367,80 @@ def main():
             st.markdown("### ✅ Interview Complete")
             st.markdown("Your interview has been successfully submitted.")
             st.markdown("---")
-            # if st.session_state.overall_score > 0:
-            #     st.metric("Overall Score", f"{st.session_state.overall_score:.1f}/10")
         
         # About section
         st.markdown("---")
-        st.markdown("### ℹ️ About This Tool")
         st.markdown("""
-        <div style='background: #1e1e2e; padding: 1rem; border-radius: 8px;'>
-            <div style='display: flex; align-items: center; gap: 10px; margin-bottom: 0.5rem;'>
-                <span>🤖</span><span>AI-Generated Questions</span>
+        <div style='
+            background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%);
+            padding: 1.25rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1);
+            border: 1px solid #BFDBFE;
+        '>
+            <h3 style='color: #1E3A8A; margin: 0 0 1rem 0; font-size: 1rem; font-weight: 600;'>ℹ️ About This Tool</h3>
+            <div style='display: flex; align-items: center; gap: 10px; margin-bottom: 0.75rem;'>
+                <span style='color: #2563EB; font-size: 1.2rem;'>✓</span>
+                <span style='color: #1E40AF; font-weight: 500; font-size: 0.9rem;'>AI-Generated Questions</span>
             </div>
-            <div style='display: flex; align-items: center; gap: 10px; margin-bottom: 0.5rem;'>
-                <span>🔄</span><span>Adaptive Follow-ups</span>
+            <div style='display: flex; align-items: center; gap: 10px; margin-bottom: 0.75rem;'>
+                <span style='color: #2563EB; font-size: 1.2rem;'>✓</span>
+                <span style='color: #1E40AF; font-weight: 500; font-size: 0.9rem;'>Adaptive Follow-ups</span>
             </div>
-            <div style='display: flex; align-items: center; gap: 10px; margin-bottom: 0.5rem;'>
-                <span>📊</span><span>Real-time Analysis</span>
+            <div style='display: flex; align-items: center; gap: 10px; margin-bottom: 0.75rem;'>
+                <span style='color: #2563EB; font-size: 1.2rem;'>✓</span>
+                <span style='color: #1E40AF; font-weight: 500; font-size: 0.9rem;'>Real-time Analysis</span>
             </div>
             <div style='display: flex; align-items: center; gap: 10px;'>
-                <span>📝</span><span>Detailed Reports</span>
+                <span style='color: #2563EB; font-size: 1.2rem;'>✓</span>
+                <span style='color: #1E40AF; font-weight: 500; font-size: 0.9rem;'>Detailed Reports</span>
             </div>
         </div>
         """, unsafe_allow_html=True)
-    
+        
+        # Profile Pill at Bottom
+        st.markdown("---")
+        st.markdown(f"""
+        <div style='
+            background: linear-gradient(135deg, #EFF6FF 0%, #E0E7FF 100%); 
+            padding: 12px; 
+            border-radius: 10px; 
+            display: flex; 
+            align-items: center; 
+            gap: 12px;
+            border: 1px solid #BFDBFE;
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+        '>
+            <div style='
+                width: 36px; 
+                height: 36px; 
+                background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%); 
+                border-radius: 50%; 
+                display: flex; 
+                align-items: center; 
+                justify-content: center;
+                color: white;
+                font-weight: bold;
+                font-size: 15px;
+                box-shadow: 0 2px 6px rgba(99, 102, 241, 0.3);
+            '>
+                {st.session_state.user[0].upper() if st.session_state.user else 'U'}
+            </div>
+            <div style='overflow: hidden;'>
+                <div style='font-size: 11px; color: #64748B; font-weight: 500;'>Logged in as</div>
+                <div style='font-size: 14px; color: #1E3A8A; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;'>{st.session_state.user}</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Center the logout button
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            if st.button("Logout", key="logout_btn", use_container_width=True):
+                st.session_state.user = None
+                st.session_state.user_id = None
+                st.rerun()
+
     # ===== MAIN CONTENT ROUTING =====
     if not st.session_state.interview_started:
         show_welcome_screen()

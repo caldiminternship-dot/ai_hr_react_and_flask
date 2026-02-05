@@ -9,8 +9,6 @@ from datetime import datetime
 import numpy as np
 
 from models import SessionLocal
-from auth import login_user
-from config import HR_EMAILS
 
 st.set_page_config(
     page_title="HR Interview Dashboard",
@@ -220,7 +218,6 @@ def create_score_chart(report_data, chart_id="default"):
                [{'type': 'scatter'}, {'type': 'box'}]]
     )
     
-    # 1. Pie chart for score distribution
     labels = ['Excellent (8-10)', 'Good (6-7)', 'Average (4-5)', 'Poor (0-3)']
     values = [0, 0, 0, 0]
     avg_score = sum(all_scores) / len(all_scores) if all_scores else 0
@@ -400,56 +397,13 @@ def generate_readable_report_locally(report_data: dict) -> str:
     
     return report
 
-def login_page():
-    st.markdown("""
-    <div style='text-align: center; margin-bottom: 2rem;'>
-        <h1 style='color: #0F172A;'>🔐 HR Portal Login</h1>
-        <p style='color: #64748B;'>Restricted Access Area</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    col1, col2, col3 = st.columns([1,1,1])
-    with col2:
-        with st.form("hr_login"):
-            email = st.text_input("Email")
-            password = st.text_input("Password", type="password")
-            submit = st.form_submit_button("Login")
-            
-            if submit:
-                # 1. Check Allowlist
-                if email not in HR_EMAILS:
-                    st.error("⛔ Access Denied: This email is not authorized for HR access.")
-                    return
-                
-                # 2. Verify Credentials
-                db = SessionLocal()
-                user = login_user(db, email, password)
-                db.close()
-                
-                if user:
-                    st.session_state.hr_user = user.email
-                    st.success("Access Granted")
-                    st.rerun()
-                else:
-                    st.error("Invalid credentials")
+# Login removed: HR dashboard is accessible without authentication in this deployment.
+# The previous `login_page` and session-based gating were removed to allow direct access.
 
 def main():
-    # Login Check
-    if 'hr_user' not in st.session_state:
-        st.session_state.hr_user = None
-        
-    if not st.session_state.hr_user:
-        login_page()
-        return
+    # Authentication removed — dashboard is accessible without login.
 
-    # Logout Button
-    with st.sidebar:
-        st.write(f"Logged in as: **{st.session_state.hr_user}**")
-        if st.button("Logout"):
-            st.session_state.hr_user = None
-            st.rerun()
-
-    st.title("📊 HR Interview Dashboard")
+    st.title("HR Interview Dashboard")
     st.markdown("Analyze candidate interview results and performance metrics")
     
     # Load reports
@@ -590,7 +544,7 @@ def main():
             filtered_reports.append(report)
     
     # Display summary metrics
-    st.markdown("## 📈 Dashboard Overview")
+    st.markdown("##Dashboard Overview")
     
     # Calculate status counts
     status_counts = {
@@ -614,7 +568,7 @@ def main():
             st.metric("Avg Questions", f"{avg_questions:.1f}")
     
     # Status distribution
-    st.markdown("### 📊 Status Distribution")
+    st.markdown("### Status Distribution")
     status_cols = st.columns(3)
     with status_cols[0]:
         st.markdown(f"""
@@ -647,7 +601,7 @@ def main():
         return
     
     # Create tabs for different views
-    tab1, tab2 = st.tabs(["🔍 Detailed View", "📊 Summary Analytics"])
+    tab1, tab2 = st.tabs(["🔍 Detailed View", "Summary Analytics"])
     
     with tab1:
         # Display each report in an expander
@@ -786,7 +740,7 @@ def main():
     
     with tab2:
         # Summary statistics across all filtered reports
-        st.subheader("📊 Summary Analytics")
+        st.subheader("Summary Analytics")
         
         if filtered_reports:
             # Create summary DataFrame
@@ -803,8 +757,6 @@ def main():
                     'Overall Score': report.get('overall_score', 0),
                     'Intro Score': profile.get('intro_score', 0),
                     'Questions': len(report.get('question_evaluations', [])),
-                    'Confidence': profile.get('confidence', 'N/A'),
-                    'Communication': profile.get('communication', 'N/A')
                 })
             
             df = pd.DataFrame(summary_data)
@@ -870,7 +822,7 @@ def main():
                 st.plotly_chart(fig, use_container_width=True, key="histogram_chart")
             
             # Status vs Experience heatmap
-            st.subheader("🔥 Status by Experience Level")
+            st.subheader("Status by Experience Level")
             if not df.empty and 'Experience' in df.columns and 'Status' in df.columns:
                 pivot_table = pd.crosstab(df['Experience'], df['Status'])
                 if not pivot_table.empty:

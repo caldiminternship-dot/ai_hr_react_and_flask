@@ -1,7 +1,7 @@
 import streamlit as st
 import time
 import os
-from config import MODEL_NAME
+from config import MODEL_NAME, MAX_QUESTIONS
 from skill_mapper import map_skills_to_category
 from datetime import datetime
 import base64
@@ -365,7 +365,7 @@ def init_session_state():
         'termination_reason': '',
         'termination_log': [],
         'current_response': '',
-        'total_questions_to_ask': 5, # 4 Technical + 1 Behavioral (Excluding Intro/Resume)
+        'total_questions_to_ask': MAX_QUESTIONS, # Technical + Behavioral (Excluding Intro/Resume)
         'questions_generated': False,
         # TAB SWITCHING DETECTION VARIABLES
         'tab_switch_count': 0,
@@ -524,43 +524,11 @@ def process_response(response_text):
 
             technical_questions = question_generator.generate_initial_skill_questions(
                 skill_category=locked_skill,
-                candidate_level=st.session_state.candidate_profile["experience_level"]
+                candidate_level=st.session_state.candidate_profile["experience_level"],
+                specific_skills=detected_skills
             )
-
-            # Safety fallback
-            # Ensure we have enough technical questions
-            num_technical_needed = st.session_state.total_questions_to_ask - 1
             
-            if not technical_questions or len(technical_questions) < num_technical_needed:
-                print(f"⚠️ Generated {len(technical_questions) if technical_questions else 0} questions, need {num_technical_needed}. Adding fallbacks.")
-                fallbacks = [
-                    f"Explain a core concept in {locked_skill}.",
-                    f"Describe a real-world problem you solved using {locked_skill}.",
-                    f"What challenges do you face when working in {locked_skill}?",
-                    f"How do you handle performance optimization in {locked_skill}?",
-                    f"Describe a time you had to debug a complex {locked_skill} issue.",
-                    f"What are the key differences between versions of {locked_skill}?"
-                ]
-                
-                if not technical_questions:
-                    technical_questions = []
-                    
-                for q in fallbacks:
-                    if q not in technical_questions:
-                        technical_questions.append(q)
-                    if len(technical_questions) >= num_technical_needed:
-                        break
-
-            # Behavioral LAST
-            behavioral_question = question_generator.generate_behavioral_question_ai(
-                candidate_background=st.session_state.candidate_profile
-            )
-
-            st.session_state.questions = (
-                technical_questions[: st.session_state.total_questions_to_ask - 1]
-                + [behavioral_question]
-            )
-
+            st.session_state.questions = technical_questions
             st.session_state.questions_generated = True
 
         st.session_state.introduction_analyzed = True
@@ -576,7 +544,13 @@ def process_response(response_text):
     current_idx = st.session_state.current_question_index - 1
 
     if current_idx < len(st.session_state.questions):
-        current_question = st.session_state.questions[current_idx]
+        # 🔒 FORCE LAST QUESTION TO BE BEHAVIORAL
+        # If this is the final slot allowed (based on limit), we grab the Behavioral Question
+        # which is always kept at the end of the list.
+        if current_idx == st.session_state.total_questions_to_ask - 1:
+            current_question = st.session_state.questions[-1]
+        else:
+            current_question = st.session_state.questions[current_idx]
     else:
         st.error("No more questions available.")
         st.session_state.interview_completed = True
@@ -597,13 +571,78 @@ def process_response(response_text):
     scores = [e["evaluation"]["overall"] for e in st.session_state.question_evaluations]
     st.session_state.overall_score = sum(scores) / len(scores)
 
-    # Move forward or finish
-    if st.session_state.current_question_index < st.session_state.total_questions_to_ask:
-        st.session_state.current_question_index += 1
-    else:
+    # --- STRICT LIMIT CHECK ---
+    # Check if we have reached the limit of questions asked (Main + Follow-up)
+    # We use the length of 'question_evaluations' as the source of truth for how many questions have been answered.
+    if len(st.session_state.question_evaluations) >= st.session_state.total_questions_to_ask:
         st.session_state.interview_completed = True
         st.session_state.interview_active = False
         save_interview_report()
+        st.rerun()
+        return
+
+    # --- Proceed to next question ---
+    # Try to generate dynamic follow-up IF we are in Section 1 or 2 (Technical phases)
+    # We DO NOT generate follow-ups for Section 3 (Behavioral, last 5).
+    
+    # Current Limit is 20. 
+    # Section 3 starts at index 15 (Questions 16-20).
+    # We should stop generating follow-ups if we are nearing the end of technical section (e.g. index 14).
+    is_technical_phase = st.session_state.current_question_index < 14
+    
+    # Determine limits
+    # For Junior: Max 2 follows up total
+    max_followups = 2 if st.session_state.candidate_profile["experience_level"] == "junior" else 5
+    current_followups_count = st.session_state.get("followup_count", 0)
+    
+    followup_generated = False
+    
+    if is_technical_phase and current_followups_count < max_followups:
+        try:
+             # Only try if not already a follow-up
+             if not current_question.lower().startswith("follow-up"): 
+                followup = question_generator.generate_followup_question(
+                    current_question,
+                    response_text,
+                    st.session_state.candidate_profile.get("primary_skill")
+                )
+                
+                if followup:
+                    insert_pos = current_idx + 1
+                    # Insert follow-up
+                    st.session_state.questions.insert(insert_pos, f"{followup}")
+                    
+                    # CRITICAL: To maintain strict count of 20, we MUST remove a future question.
+                    # We want to remove a "prescribed" technical question from Section 2 to make room.
+                    # We must NOT remove Behavioral questions (last 5).
+                    # Safest valid index to pop is the one right BEFORE the behavioral section.
+                    # Behavioral starts at index -5. So -6 is the last technical question.
+                    
+                    if len(st.session_state.questions) > st.session_state.total_questions_to_ask:
+                        # Find a candidate to remove. Ideally the last Technical question (index -6)
+                        pop_index = len(st.session_state.questions) - 6
+                        # Ensure we don't pop the one we just inserted or the current one.
+                        if pop_index > insert_pos:
+                            removed = st.session_state.questions.pop(pop_index)
+                            print(f"Removed '{removed}' to maintain question limit.")
+                        else:
+                            # Edge case fallback: Just pop the one after follow-up
+                            st.session_state.questions.pop(insert_pos + 1)
+
+                    st.session_state.followup_count = current_followups_count + 1
+                    
+                    st.session_state.messages.append({
+                        "role": "system",
+                        "content": f"🔍 Follow-up question added: {followup}",
+                        "timestamp": datetime.now().strftime("%H:%M:%S")
+                    })
+                    
+                    followup_generated = True
+
+        except Exception as e:
+            print(f"Follow-up error: {e}") 
+
+    st.session_state.current_question_index += 1
 
     st.session_state.messages.append({
         "role": "system",
@@ -670,41 +709,11 @@ def show_interview_in_progress():
                 if not st.session_state.get("questions_generated", False):
                     technical_questions = question_generator.generate_initial_skill_questions(
                         skill_category=locked_skill,
-                        candidate_level=st.session_state.candidate_profile["experience_level"]
+                        candidate_level=st.session_state.candidate_profile["experience_level"],
+                        specific_skills=detected_skills
                     )
 
-                    # Safety fallback
-                    # Ensure we have enough technical questions
-                    num_technical_needed = st.session_state.total_questions_to_ask - 1
-
-                    if not technical_questions or len(technical_questions) < num_technical_needed:
-                        fallbacks = [
-                            f"Explain a core concept in {locked_skill}.",
-                            f"Describe a real-world problem you solved using {locked_skill}.",
-                            f"What challenges do you face when working in {locked_skill}?",
-                            f"How do you handle performance optimization in {locked_skill}?",
-                            f"Describe a time you had to debug a complex {locked_skill} issue.",
-                            f"What are the key differences between versions of {locked_skill}?"
-                        ]
-                        
-                        if not technical_questions:
-                            technical_questions = []
-                            
-                        for q in fallbacks:
-                            if q not in technical_questions:
-                                technical_questions.append(q)
-                            if len(technical_questions) >= num_technical_needed:
-                                break
-
-                    # Behavioral LAST
-                    behavioral_question = question_generator.generate_behavioral_question_ai(
-                        candidate_background=st.session_state.candidate_profile
-                    )
-
-                    st.session_state.questions = (
-                        technical_questions[: st.session_state.total_questions_to_ask - 1]
-                        + [behavioral_question]
-                    )
+                    st.session_state.questions = technical_questions
 
                     st.session_state.questions_generated = True
 
@@ -989,8 +998,12 @@ def save_interview_report():
     try:
         report_path = report_manager.save_interview_report(st.session_state)
         st.session_state.report_path = report_path
+        # Mark report as saved to avoid duplicate saves on reruns
+        st.session_state.report_saved = True
     except Exception as e:
         st.error(f"Error saving report: {str(e)}")
+        # Ensure flag is unset on failure so retries can occur
+        st.session_state.report_saved = False
 
 def show_report():
     """Display the interview completion screen"""

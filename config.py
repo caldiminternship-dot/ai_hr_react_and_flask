@@ -8,7 +8,7 @@ OPENROUTER_BASE_URL = "https://api.groq.com/openai/v1"
 MODEL_NAME = "llama-3.3-70b-versatile"
 
 # Interview settings
-MAX_QUESTIONS = 7
+MAX_QUESTIONS = 20
 MIN_QUESTIONS = 3
 QUESTION_DIFFICULTY_LEVELS = ["basic", "intermediate", "advanced", "scenario-based"]
 
@@ -16,7 +16,7 @@ QUESTION_DIFFICULTY_LEVELS = ["basic", "intermediate", "advanced", "scenario-bas
 SKILL_CATEGORIES = {
     # Software Development
     "backend": [
-        "Python", "Java", "Node.js", "C#", "Go",
+        "Python", "Java", "Node.js", "C#", "Golang",
         "Databases", "REST APIs", "Microservices"
     ],
 

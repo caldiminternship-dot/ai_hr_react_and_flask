@@ -67,20 +67,23 @@ class QuestionGenerator:
         
         c_level = candidate_level.lower()
         if "junior" in c_level or "beginner" in c_level or "fresher" in c_level:
-            # Generate 10 Basic questions. We will inject 2 dynamic follow-ups in app.py to achieve the 8+2 ratio.
-            mix_ratio_instruction = "Generate 10 BASIC technical questions."
+            # Generate 10 Basic questions. We will dynamically insert 2 follow-ups in the App.
+            mix_ratio_instruction = "Generate 10 BASIC/INTERMEDIATE technical questions."
         elif "senior" in c_level or "expert" in c_level or "experienced" in c_level:
-             mix_ratio_instruction = "Generate 2 BASIC technical questions and 8 DEEP/COMPLEX technical questions."
+             # Generate 10 High-level questions. We will dynamically insert 8 follow-ups in the App.
+             mix_ratio_instruction = "Generate 10 ADVANCED/COMPLEX technical questions."
         else: # Mid/Average
-             mix_ratio_instruction = "Generate 5 BASIC technical questions and 5 DEEP/COMPLEX technical questions."
+             mix_ratio_instruction = "Generate 10 INTERMEDIATE/ADVANCED technical questions."
 
         if skill_category == "aec_bim":
-             strict_exclusion = "CRITICAL: The domain is AEC/BIM. Do NOT ask about software development (Go, Python) OR Data Management (Databases, Data Analytics, general 'Data'). Focus ONLY on Engineering, Detailing, Modeling, and Construction."
+             strict_exclusion = "CRITICAL: The domain is AEC/BIM. Do NOT ask about software development (Go, Python) OR Data Management (Databases, Data Analytics). Do NOT ask about User Interface (UI) locations, buttons, ribbons, or menu paths. Focus ONLY on Engineering concepts, Detailing rules, Modeling logic, and Construction workflows."
         else:
              strict_exclusion = ""
 
-        prompt = f"""
-        You are an expert technical interviewer. Generate exactly 20 interview questions for a candidate.
+        # Call 1: Generate 15 Technical Questions
+        # Structure: 5 Basic + 10 Mixed
+        prompt_tech = f"""
+        You are an expert technical interviewer. Generate exactly 15 technical interview questions.
         
         Candidate Domain: {skill_category}
         Candidate Level: {candidate_level}
@@ -91,7 +94,7 @@ class QuestionGenerator:
         2. {strict_exclusion}
         3. If a skill is not in the list, ignore it completely.
         
-        Strictly follow this structure and numbering:
+        Strictly follow this structure:
 
         SECTION 1: 5 BASIC Technical Questions
         - Focus: Core concepts, definitions, tools.
@@ -102,43 +105,82 @@ class QuestionGenerator:
         - {mix_ratio_instruction}
         - Topic: Strictly related to Key Skills ({skills_text}).
 
-        SECTION 3: 5 BEHAVIORAL Questions
-        - Focus: Teamwork, ownership, communications, adaptability.
-        - Must be relevant to a technical workplace.
-
         OUTPUT FORMAT:
-        Return ONLY the list of 20 questions, one per line. 
-        Do not use headers like "SECTION 1". 
-        Do not number them (I will handle numbering).
-        Just 20 lines of text, each ending with a question mark.
+        Return ONLY the list of 15 questions, one per line.
         """
 
+        tech_questions = []
         try:
-            res = openai.ChatCompletion.create(
+            res_tech = openai.ChatCompletion.create(
                 model=MODEL_NAME,
-                messages=[{"role": "user", "content": prompt}],
+                messages=[{"role": "user", "content": prompt_tech}],
                 temperature=0.7, 
-                max_tokens=650 
+                max_tokens=600 
             )
-
-            all_questions = []
-            raw_lines = res.choices[0].message.content.strip().split("\n")
-            
+            raw_lines = res_tech.choices[0].message.content.strip().split("\n")
             import re
             for line in raw_lines:
-                # Clean line: remove leading numbers/bullets (e.g. "1. ", "- ")
                 line = re.sub(r'^[\d\-\.\)\s]+', '', line.strip())
                 if line and "?" in line:
-                    all_questions.append(line)
-            
-            # Ensure we have exactly 20 (or closest possible)
-            # If AI generates too few, we might need a fallback, but for now return what we got.
-            # Using slice to ensure no more than 20 if AI goes crazy.
-            return all_questions[:20]
-
+                    tech_questions.append(line)
         except Exception as e:
-            print(f"Error generating 20 questions: {e}")
-            return self._fallback(skill_category) * 4 # Fallback to ~12 questions 
+            print(f"Error generating technical questions: {e}")
+            tech_questions = self._fallback(skill_category) * 3
+
+        # Call 2: Generate 5 Behavioral Questions
+        prompt_beh = f"""
+        You are an HR interviewer. Generate exactly 5 behavioral interview questions.
+        
+        Focus: Teamwork, ownership, communications, adaptability, conflict resolution.
+        Context: For a technical role in {skill_category} at {candidate_level} level.
+        
+        OUTPUT FORMAT:
+        Return ONLY the list of 5 questions, one per line.
+        """
+        
+        beh_questions = []
+        try:
+            res_beh = openai.ChatCompletion.create(
+                model=MODEL_NAME,
+                messages=[{"role": "user", "content": prompt_beh}],
+                temperature=0.8, 
+                max_tokens=300
+            )
+            raw_lines = res_beh.choices[0].message.content.strip().split("\n")
+            for line in raw_lines:
+                line = re.sub(r'^[\d\-\.\)\s]+', '', line.strip())
+                if line and "?" in line:
+                    beh_questions.append(line)
+        except Exception as e:
+            print(f"Error generating behavioral questions: {e}")
+            beh_questions = ["Describe a time you showed leadership.", "How do you handle conflict?", "Describe a challenge you overcame.", "How do you prioritize tasks?", "Why do you want this job?"]
+
+        # Combine: First 15 Tech + Last 5 Behavioral
+        # Ensure tech list is trimmed/padded to 15 if AI messed up
+        final_tech = tech_questions[:15]
+        if len(final_tech) < 15:
+            # Pad if needed (unlikely)
+            while len(final_tech) < 15:
+                 final_tech.append(f"Explain a core concept in {skill_category}.")
+        
+        final_beh = beh_questions[:5]
+        final_beh = beh_questions[:5]
+        if len(final_beh) < 5:
+             fallback_beh = [
+                 "Describe a professional achievement you are proud of.",
+                 "How do you handle tight deadlines?",
+                 "Describe a time you had a conflict with a colleague and how you resolved it.",
+                 "What is your preferred work style: independent or collaborative?",
+                 "How do you stay updated with industry trends?"
+             ]
+             # Fill with unique fallbacks
+             for q in fallback_beh:
+                 if len(final_beh) >= 5:
+                     break
+                 if q not in final_beh:
+                     final_beh.append(q)
+
+        return final_tech + final_beh 
 
     def generate_behavioral_question_ai(
         self,

@@ -1,6 +1,6 @@
 /.venv
 /__pycache__
 /interview_reports/*
-
+/virtual_hr.zip
 /reports
 .env

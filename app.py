@@ -582,54 +582,66 @@ def process_response(response_text):
         return
 
     # --- Proceed to next question ---
-    # Try to generate dynamic follow-up IF we are in Section 1 or 2 (Technical phases)
-    # We DO NOT generate follow-ups for Section 3 (Behavioral, last 5).
-    
-    # Current Limit is 20. 
-    # Section 3 starts at index 15 (Questions 16-20).
-    # We should stop generating follow-ups if we are nearing the end of technical section (e.g. index 14).
-    is_technical_phase = st.session_state.current_question_index < 14
-    
-    # Determine limits
-    # For Junior: Max 2 follows up total
-    max_followups = 2 if st.session_state.candidate_profile["experience_level"] == "junior" else 5
-    current_followups_count = st.session_state.get("followup_count", 0)
-    
-    followup_generated = False
-    
-    if is_technical_phase and current_followups_count < max_followups:
-        try:
-             # Only try if not already a follow-up
-             if not current_question.lower().startswith("follow-up"): 
-                followup = question_generator.generate_followup_question(
-                    current_question,
-                    response_text,
-                    st.session_state.candidate_profile.get("primary_skill")
-                )
-                
-                if followup:
-                    insert_pos = current_idx + 1
-                    # Insert follow-up
-                    st.session_state.questions.insert(insert_pos, f"{followup}")
-                    
-                    # CRITICAL: To maintain strict count of 20, we MUST remove a future question.
-                    # We want to remove a "prescribed" technical question from Section 2 to make room.
-                    # We must NOT remove Behavioral questions (last 5).
-                    # Safest valid index to pop is the one right BEFORE the behavioral section.
-                    # Behavioral starts at index -5. So -6 is the last technical question.
-                    
-                    if len(st.session_state.questions) > st.session_state.total_questions_to_ask:
-                        # Find a candidate to remove. Ideally the last Technical question (index -6)
-                        pop_index = len(st.session_state.questions) - 6
-                        # Ensure we don't pop the one we just inserted or the current one.
-                        if pop_index > insert_pos:
-                            removed = st.session_state.questions.pop(pop_index)
-                            print(f"Removed '{removed}' to maintain question limit.")
-                        else:
-                            # Edge case fallback: Just pop the one after follow-up
-                            st.session_state.questions.pop(insert_pos + 1)
+    # --- Proceed to next question ---
+    st.session_state.current_question_index += 1
 
-                    st.session_state.followup_count = current_followups_count + 1
+    # --- DYNAMIC FOLLOW-UP LOGIC ---
+    # Apply only during Section 2 (the middle 10 questions: roughly indices 5-14)
+    # Target Mix:
+    # Junior: 2 Follow-ups (Indices ~5-14)
+    # Mid: 5 Follow-ups
+    # Senior: 8 Follow-ups
+    
+    current_idx = st.session_state.current_question_index
+    # Only trigger if within the Technical Section (before Behavioral at 15)
+    # And specifically targeting the "Mixed" section (starts around Q6 i.e. index 5)
+    is_mixed_section = 5 <= current_idx < 15
+    
+    c_level = st.session_state.candidate_profile.get("experience_level", "mid").lower()
+    if "junior" in c_level or "beginner" in c_level:
+        target_followups = 2
+    elif "senior" in c_level or "expert" in c_level:
+        target_followups = 8
+    else:
+        target_followups = 5
+        
+    current_followups = st.session_state.get("followup_count", 0)
+    
+    if is_mixed_section and current_followups < target_followups:
+        try:
+            # Generate the follow-up
+            followup = question_generator.generate_followup_question(
+                current_question,
+                response_text,
+                st.session_state.candidate_profile.get("primary_skill")
+            )
+            
+            if followup:
+                # Insert at next position (current_idx is already incremented, so insert AT current_idx)
+                # This pushes existing questions down.
+                st.session_state.questions.insert(current_idx, f"Follow-up: {followup}")
+                
+                # To maintain COUNT (20), remove a future question from Section 2.
+                # The safest one to remove is the LAST generic technical question.
+                # Index of last technical generic question is roughly 15 (before Behavioral starts)
+                # But since we inserted one, the list grew by 1.
+                # Behavioral started at 15, now at 16.
+                # So we want to remove index 15 (the last technical question).
+                
+                # Verify we are popping a technical question, not a behavioral one.
+                # How? We assume the generator put 5 behavioral at end during init.
+                # The list has grown by 1 (inserted at current_idx).
+                # New length is 21. Last 5 are Behavioral (indices 16,17,18,19,20).
+                # The Technical Section (Section 2) ends at index 15.
+                
+                pop_target = len(st.session_state.questions) - 6
+                
+                # Ensure we don't pop the one we just inserted (current_idx) or anything weird
+                if pop_target > current_idx:
+                    removed = st.session_state.questions.pop(pop_target)
+                    print(f"Removed '{removed}' to maintain 20 questions.")
+                    
+                    st.session_state.followup_count = current_followups + 1
                     
                     st.session_state.messages.append({
                         "role": "system",
@@ -637,12 +649,8 @@ def process_response(response_text):
                         "timestamp": datetime.now().strftime("%H:%M:%S")
                     })
                     
-                    followup_generated = True
-
         except Exception as e:
-            print(f"Follow-up error: {e}") 
-
-    st.session_state.current_question_index += 1
+            print(f"Dynamic follow-up error: {e}") 
 
     st.session_state.messages.append({
         "role": "system",
@@ -1362,9 +1370,10 @@ def main():
         if st.session_state.interview_active:
             # Progress
             total_questions = st.session_state.total_questions_to_ask
-            progress = min(st.session_state.current_question_index / total_questions, 1.0)
+            current_q = min(st.session_state.current_question_index, total_questions)
+            progress = min(current_q / total_questions, 1.0)
             
-            st.markdown("**Progress**")
+            st.markdown(f"**Question {current_q} of {total_questions}**")
             st.progress(progress)
             
             # Quick actions
